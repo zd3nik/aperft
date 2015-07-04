@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <assert.h>
@@ -24,6 +25,9 @@
 #define SQR(x,y)      ((x) + ((y) * 8))
 #define XC(x)         ((x) % 8)
 #define YC(x)         ((x) / 8)
+
+//-----------------------------------------------------------------------------
+typedef bool Color;
 
 //-----------------------------------------------------------------------------
 int _board[64] = {0};
@@ -60,7 +64,7 @@ enum Direction {
 };
 
 //-----------------------------------------------------------------------------
-enum Color {
+enum ColorType {
   White,
   Black
 };
@@ -92,10 +96,10 @@ enum MoveType {
 
 //-----------------------------------------------------------------------------
 enum CastleRights {
-  WhiteShort = 0x1,
-  WhiteLong  = 0x2,
-  BlackShort = 0x4,
-  BlackLong  = 0x8
+  WhiteShort = 0x02,
+  WhiteLong  = 0x04,
+  BlackShort = 0x08,
+  BlackLong  = 0x10
 };
 
 //-----------------------------------------------------------------------------
@@ -149,14 +153,12 @@ public:
     assert(Promo() == promo);
     Validate();
   }
-  void Set(const Move& other, const int cap, const int promo) {
-    other.Validate();
-    desc = ((other.desc & TwentyBits) | // type, from, to
+  void SetCapPromo(const int cap, const int promo) {
+    assert(!cap || IS_CAP(cap));
+    assert(!promo || IS_PROMO(promo));
+    desc = ((desc & TwentyBits) | // type, from, to
             static_cast<uint32_t>(cap   <<   CapShift) |
             static_cast<uint32_t>(promo << PromoShift));
-    assert(Type() == other.Type());
-    assert(From() == other.From());
-    assert(To() == other.To());
     assert(Cap() == cap);
     assert(Promo() == promo);
     Validate();
@@ -209,6 +211,15 @@ private:
 };
 
 //-----------------------------------------------------------------------------
+Move  _moveStack[MoveStackSize];
+Move* _pawnMoves[64][2];
+Move* _knightMoves[64];
+Move* _bishopMoves[64][4];
+Move* _rookMoves[64][4];
+Move* _queenMoves[64][8];
+Move* _kingMoves[64][2];
+
+//-----------------------------------------------------------------------------
 const char* NextWord(const char* p) {
   while (p && *p && isspace(*p)) ++p;
   return p;
@@ -240,6 +251,48 @@ public:
   int Ply() const { return ply; }
   int ColorToMove() const { return COLOR(state); }
   int EpSquare() const { return ep; }
+  void Print() const {
+    std::cout << std::endl;
+    for (int y = 7; y >= 0; --y) {
+      for (int x = 0; x < 8; ++x) {
+        switch (_board[SQR(x, y)]) {
+        case (White|Pawn):   std::cout << " P"; break;
+        case (White|Knight): std::cout << " N"; break;
+        case (White|Bishop): std::cout << " B"; break;
+        case (White|Rook):   std::cout << " R"; break;
+        case (White|Queen):  std::cout << " Q"; break;
+        case (White|King):   std::cout << " K"; break;
+        case (Black|Pawn):   std::cout << " p"; break;
+        case (Black|Knight): std::cout << " n"; break;
+        case (Black|Bishop): std::cout << " b"; break;
+        case (Black|Rook):   std::cout << " r"; break;
+        case (Black|Queen):  std::cout << " q"; break;
+        case (Black|King):   std::cout << " k"; break;
+        default:
+          std::cout << (((x ^ y) & 1) ? " -" : "  ");
+        }
+      }
+      switch (y) {
+      case 7:
+        std::cout << (ColorToMove() ? "  Black to move" : "  White to move");
+        break;
+      case 6:
+        std::cout << "  Castling Rights   : ";
+        if (state & WhiteShort) std::cout << 'K';
+        if (state & WhiteLong)  std::cout << 'Q';
+        if (state & BlackShort) std::cout << 'k';
+        if (state & BlackLong)  std::cout << 'q';
+        break;
+      case 5:
+        if (ep) {
+          std::cout << "  En Passant Square : " << SquareStr(ep);
+        }
+        break;
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+  }
   bool LoadFEN(const char* fen) {
     memset(_board, 0, sizeof(_board));
     state = 0;
@@ -324,26 +377,234 @@ public:
     }
     return true;
   }
-  void Exec(const Move& move, Node& dest) const {
+  template<Color color>
+  bool Exec(const Move& /*move*/, Node& /*dest*/) const {
+    // TODO
+    return false;
+  }
+  template<Color color>
+  void Undo(const Move& /*move*/) const {
     // TODO
   }
-  void Undo(const Move& move) const {
-    // TODO
-  }
-  Move NextMove() {
+  Move& AddMove(const Move& move) {
     assert(moveCount >= 0);
-    assert(moveIndex <= moveCount);
-    if (moveIndex < moveCount) {
-      return moves[moveIndex++];
-    }
-    return Move();
+    assert(moveCount < MoveListSize);
+    return (moves[moveCount++] = move);
   }
+  template<Color color>
+  void GetPawnMoves(const Move* mv) {
+    assert(mv);
+    for (int to, cap; *mv; ++mv) {
+      assert(mv->Valid());
+      assert(_board[mv->From()] == (color|Pawn));
+      cap = _board[(to = mv->To())];
+      switch (mv->Type()) {
+      case PawnMove:
+        if (!cap) {
+          if (YC(to) == (color ? 0 : 7)) {
+            for (int promo = Queen; promo >= Knight; promo -= 2) {
+              AddMove(*mv).SetCapPromo(0, (color|promo));
+            }
+          }
+          else {
+            AddMove(*mv);
+            if (mv[1].Type() == PawnLung) {
+              ++mv;
+              if (!_board[mv->To()]) {
+                AddMove(*mv);
+              }
+            }
+          }
+        }
+        break;
+      case PawnCap:
+        if (cap && (COLOR(cap) != color)) {
+          if (YC(to) == (color ? 0 : 7)) {
+            for (int promo = Queen; promo >= Knight; promo -= 2) {
+              AddMove(*mv).SetCapPromo(cap, (color|promo));
+            }
+          }
+          else {
+            AddMove(*mv).SetCapPromo(cap, 0);
+          }
+        }
+        else if (!cap && ep && (to == ep)) {
+          AddMove(*mv);
+        }
+        break;
+      default:
+        assert(false);
+      }
+    }
+  }
+  void GetKnightMoves(const Color color, const Move* mv) {
+    assert(mv);
+    for (int cap; *mv; ++mv) {
+      assert(mv->Valid());
+      assert(mv->Type() == KnightMove);
+      assert(_board[mv->From()] == (color|Knight));
+      if (!(cap = _board[mv->To()])) {
+        AddMove(*mv);
+      }
+      else if (COLOR(cap) != color) {
+        AddMove(*mv).SetCapPromo(cap, 0);
+      }
+    }
+  }
+  void GetBishopMoves(const Color color, Move* mvs[4]) {
+    assert(mvs);
+    int cap;
+    for (int i = 0; (i < 4) && mvs[i]; ++i) {
+      for (const Move* mv = mvs[i]; *mv; ++mv) {
+        assert(mv->Valid());
+        assert(mv->Type() == BishopMove);
+        assert(_board[mv->From()] == (color|Bishop));
+        if (!(cap = _board[mv->To()])) {
+          AddMove(*mv);
+        }
+        else {
+          if (COLOR(cap) != color) {
+            AddMove(*mv).SetCapPromo(cap, 0);
+          }
+          break;
+        }
+      }
+    }
+  }
+  void GetRookMoves(const Color color, Move* mvs[4]) {
+    assert(mvs);
+    int cap;
+    for (int i = 0; (i < 4) && mvs[i]; ++i) {
+      for (const Move* mv = mvs[i]; *mv; ++mv) {
+        assert(mv->Valid());
+        assert(mv->Type() == RookMove);
+        assert(_board[mv->From()] == (color|Rook));
+        if (!(cap = _board[mv->To()])) {
+          AddMove(*mv);
+        }
+        else {
+          if (COLOR(cap) != color) {
+            AddMove(*mv).SetCapPromo(cap, 0);
+          }
+          break;
+        }
+      }
+    }
+  }
+  void GetQueenMoves(const Color color, Move* mvs[8]) {
+    assert(mvs);
+    int cap;
+    for (int i = 0; (i < 8) && mvs[i]; ++i) {
+      for (const Move* mv = mvs[i]; *mv; ++mv) {
+        assert(mv->Valid());
+        assert(mv->Type() == QueenMove);
+        assert(_board[mv->From()] == (color|Queen));
+        if (!(cap = _board[mv->To()])) {
+          AddMove(*mv);
+        }
+        else {
+          if (COLOR(cap) != color) {
+            AddMove(*mv).SetCapPromo(cap, 0);
+          }
+          break;
+        }
+      }
+    }
+  }
+  template<Color color>
+  void GetKingMoves(const Move* mv) {
+    assert(mv);
+    for (int cap; *mv; ++mv) {
+      assert(mv->Valid());
+      assert(_board[mv->From()] == (color|King));
+      cap = _board[mv->To()];
+      switch (mv->Type()) {
+      case KingMove:
+        if (!cap) {
+          AddMove(*mv);
+        }
+        else if (COLOR(cap) != color) {
+          AddMove(*mv).SetCapPromo(cap, 0);
+        }
+        break;
+      case CastleShort:
+        if (!cap && (state & (color ? BlackShort : WhiteShort)) &&
+            !_board[color ? F8 : F1] && // TODO
+            !_board[color ? G8 : G1])
+        {
+          assert(_board[color ? H8 : H1] == (color|Rook));
+          AddMove(*mv);
+        }
+        break;
+      case CastleLong:
+        if (!cap && (state & (color ? BlackShort : WhiteShort)) &&
+            !_board[color ? B8 : B1] && // TODO
+            !_board[color ? C8 : C1] &&
+            !_board[color ? D8 : D1])
+        {
+          assert(_board[color ? A8 : A1] == (color|Rook));
+          AddMove(*mv);
+        }
+        break;
+      default:
+        assert(false);
+      }
+    }
+  }
+  template<Color color>
   int GenerateMoves() {
     moveCount = moveIndex = 0;
-    // TODO
+    for (int sqr = A1; sqr <= H8; ++sqr) {
+      switch (_board[sqr]) {
+      case (color|Pawn):   GetPawnMoves<color>(_pawnMoves[sqr][color]); break;
+      case (color|Knight): GetKnightMoves(color, _knightMoves[sqr]);    break;
+      case (color|Bishop): GetBishopMoves(color, _bishopMoves[sqr]);    break;
+      case (color|Rook):   GetRookMoves(color, _rookMoves[sqr]);        break;
+      case (color|Queen):  GetQueenMoves(color, _queenMoves[sqr]);      break;
+      case (color|King):   GetKingMoves<color>(_kingMoves[sqr][color]); break;
+      default:
+        assert(!_board[sqr] || (COLOR(_board[sqr]) != color));
+      }
+    }
     return moveCount;
   }
-
+  template<Color color>
+  uint64_t PerftSearch(const int depth) {
+    GenerateMoves<color>();
+    if (!child || (depth <= 1)) {
+      return moveCount;
+    }
+    uint64_t count = 0;
+    while (moveIndex < moveCount) {
+      const Move& move = moves[moveIndex++];
+      Exec<color>(move, *child);
+      count += child->PerftSearch<!color>(depth - 1);
+      Undo<color>(move);
+    }
+    return count;
+  }
+  template<Color color>
+  void Perft(const int depth) {
+    assert(!ply);
+    assert(!parent);
+    assert(child);
+    GenerateMoves<color>();
+    std::sort(moves, (moves + moveCount));
+    if (depth > 1) {
+      while (moveIndex < moveCount) {
+        const Move& move = moves[moveIndex++];
+        Exec<color>(move, *child);
+        const uint64_t count = child->PerftSearch<!color>(depth - 1);
+        Undo<color>(move);
+        std::cout << move.ToString() << ' ' << count << std::endl;
+      }
+    }
+    else {
+      while (moveIndex < moveCount) {
+        std::cout << moves[moveIndex++].ToString() << " 1 " << std::endl;
+      }
+    }
+  }
 private:
   Node* parent;
   Node* child;
@@ -357,13 +618,6 @@ private:
 
 //-----------------------------------------------------------------------------
 Node  _nodes[MaxPlies];
-Move  _moveStack[MoveStackSize];
-Move* _pawnMoves[64][2];
-Move* _knightMoves[64];
-Move* _bishopMoves[64][4];
-Move* _rookMoves[64][4];
-Move* _queenMoves[64][8];
-Move* _kingMoves[64][2];
 
 //-----------------------------------------------------------------------------
 void InitNodeStack() {
@@ -398,7 +652,6 @@ bool GetToSquare(const int from, const int dir[2], int& to) {
 //-----------------------------------------------------------------------------
 template<Color color>
 void StackPawnMoves(const int from, int& stackPos) {
-  assert(IS_COLOR(color));
   assert(IS_SQUARE(from));
   Move* first = NULL;
   Move* mv = NULL;
@@ -418,7 +671,8 @@ void StackPawnMoves(const int from, int& stackPos) {
     (mv = StackMove(stackPos))->Set(PawnMove, from, to);
     if (!first) first = mv;
     if (YC(from) == (color ? 6 : 1)) {
-      (mv = StackMove(stackPos))->Set(PawnLung, from, to);
+      (mv = StackMove(stackPos))->Set(PawnLung, from,
+                                      (to + (color ? South : North)));
     }
   }
   (mv = StackMove(stackPos))->Clear();
@@ -476,9 +730,8 @@ void StackBishopMoves(const int from, int& stackPos) {
       _bishopMoves[from][idx++] = first;
     }
   }
-  if (!idx) {
-    (mv = StackMove(stackPos))->Clear();
-    _bishopMoves[from][0] = mv;
+  if (idx < 4) {
+    _bishopMoves[from][idx] = NULL;
   }
 }
 
@@ -505,9 +758,8 @@ void StackRookMoves(const int from, int& stackPos) {
       _rookMoves[from][idx++] = first;
     }
   }
-  if (!idx) {
-    (mv = StackMove(stackPos))->Clear();
-    _rookMoves[from][0] = mv;
+  if (idx < 4) {
+    _rookMoves[from][idx] = NULL;
   }
 }
 
@@ -538,16 +790,14 @@ void StackQueenMoves(const int from, int& stackPos) {
       _queenMoves[from][idx++] = first;
     }
   }
-  if (!idx) {
-    (mv = StackMove(stackPos))->Clear();
-    _queenMoves[from][0] = mv;
+  if (idx < 8) {
+    _queenMoves[from][idx] = NULL;
   }
 }
 
 //-----------------------------------------------------------------------------
 template<Color color>
 void StackKingMoves(const int from, int& stackPos) {
-  assert(IS_COLOR(color));
   assert(IS_SQUARE(from));
   const int dir[8][2] = {
     { -1, -1 },
@@ -631,8 +881,14 @@ int main(int argc, char* argv[])
   if (!_nodes[0].LoadFEN(fen.c_str())) {
     return 3;
   }
+  _nodes[0].Print();
   std::cout << "Calculating perft to depth " << depth << std::endl;
-  // TODO
+  if (_nodes[0].ColorToMove()) {
+    _nodes[0].Perft<Black>(depth);
+  }
+  else {
+    _nodes[0].Perft<White>(depth);
+  }
   return 0;
 }
 
