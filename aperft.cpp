@@ -241,9 +241,9 @@ public:
     desc = other.desc;
     return *this;
   }
-  void Clear() { desc = NoMove; }
-  void Set(const int type, const int from, const int to,
-           const int cap = 0, const int promo = 0)
+  Move& Clear() { desc = NoMove; return *this; }
+  Move& Set(const int type, const int from, const int to,
+            const int cap = 0, const int promo = 0)
   {
     desc = (type                  |
             (from  <<  FromShift) |
@@ -256,8 +256,9 @@ public:
     assert(Cap() == cap);
     assert(Promo() == promo);
     Validate();
+    return *this;
   }
-  void SetCapPromo(const int cap, const int promo) {
+  Move& SetCapPromo(const int cap, const int promo) {
     assert(!cap || IS_CAP(cap));
     assert(!promo || IS_PROMO(promo));
     desc = ((desc & TwentyBits)   | // type, from, to
@@ -266,6 +267,7 @@ public:
     assert(Cap() == cap);
     assert(Promo() == promo);
     Validate();
+    return *this;
   }
   bool operator!() const { return !desc; }
   bool operator==(const Move& other) const { return (desc == other.desc); }
@@ -799,10 +801,30 @@ public:
       assert(_sliderCount[color] < 12);
     }
   }
-  Move& AddMove(const Move& move) {
+  void AddMove(const Color color, const Move& move) {
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
-    return (moves[moveCount++] = move);
+    if (_sliderCount[!color]) {
+      if (atkDir[move.From()] == abs(_dir[move.From()][move.To()])) {
+        return;
+      }
+    }
+    moves[moveCount++] = move;
+  }
+  void AddMove(const Color color, const Move& move,
+               const int cap, const int promo)
+  {
+    assert(moveCount >= 0);
+    assert(moveCount < MoveListSize);
+    if (_sliderCount[!color]) {
+      if (atkDir[move.From()] == abs(_dir[move.From()][move.To()])) {
+        return;
+      }
+    }
+    if (cap && !IS_CAP(cap)) {
+      Print();
+    }
+    (moves[moveCount++] = move).SetCapPromo(cap, promo);
   }
   template<Color color>
   void GetPawnMoves(const Move* mv) {
@@ -816,17 +838,17 @@ public:
         if (!cap) {
           if (YC(to) == (color ? 0 : 7)) {
             for (int promo = Queen; promo >= Knight; promo -= 2) {
-              AddMove(*mv).SetCapPromo(0, (color|promo));
+              AddMove(color, *mv, 0, (color|promo));
             }
           }
           else {
-            AddMove(*mv);
+            AddMove(color, *mv);
           }
         }
         if (mv[1].Type() == PawnLung) {
           ++mv;
           if (!cap && !_board[mv->To()]) {
-            AddMove(*mv);
+            AddMove(color, *mv);
           }
         }
         break;
@@ -834,15 +856,15 @@ public:
         if (cap && (COLOR(cap) != color)) {
           if (YC(to) == (color ? 0 : 7)) {
             for (int promo = Queen; promo >= Knight; promo -= 2) {
-              AddMove(*mv).SetCapPromo(cap, (color|promo));
+              AddMove(color, *mv, cap, (color|promo));
             }
           }
           else {
-            AddMove(*mv).SetCapPromo(cap, 0);
+            AddMove(color, *mv, cap, 0);
           }
         }
         else if (!cap && ep && (to == ep)) {
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         break;
       default:
@@ -857,10 +879,10 @@ public:
       assert(mv->Type() == KnightMove);
       assert(_board[mv->From()] == (color|Knight));
       if (!(cap = _board[mv->To()])) {
-        AddMove(*mv);
+        AddMove(color, *mv);
       }
       else if (COLOR(cap) != color) {
-        AddMove(*mv).SetCapPromo(cap, 0);
+        AddMove(color, *mv, cap, 0);
       }
     }
   }
@@ -873,11 +895,11 @@ public:
         assert(mv->Type() == BishopMove);
         assert(_board[mv->From()] == (color|Bishop));
         if (!(cap = _board[mv->To()])) {
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         else {
           if (COLOR(cap) != color) {
-            AddMove(*mv).SetCapPromo(cap, 0);
+            AddMove(color, *mv, cap, 0);
           }
           break;
         }
@@ -893,11 +915,11 @@ public:
         assert(mv->Type() == RookMove);
         assert(_board[mv->From()] == (color|Rook));
         if (!(cap = _board[mv->To()])) {
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         else {
           if (COLOR(cap) != color) {
-            AddMove(*mv).SetCapPromo(cap, 0);
+            AddMove(color, *mv, cap, 0);
           }
           break;
         }
@@ -913,11 +935,11 @@ public:
         assert(mv->Type() == QueenMove);
         assert(_board[mv->From()] == (color|Queen));
         if (!(cap = _board[mv->To()])) {
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         else {
           if (COLOR(cap) != color) {
-            AddMove(*mv).SetCapPromo(cap, 0);
+            AddMove(color, *mv, cap, 0);
           }
           break;
         }
@@ -934,10 +956,10 @@ public:
       switch (mv->Type()) {
       case KingMove:
         if (!cap) {
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         else if (COLOR(cap) != color) {
-          AddMove(*mv).SetCapPromo(cap, 0);
+          AddMove(color, *mv, cap, 0);
         }
         break;
       case CastleShort:
@@ -946,7 +968,7 @@ public:
             !_board[color ? G8 : G1])
         {
           assert(_board[color ? H8 : H1] == (color|Rook));
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         break;
       case CastleLong:
@@ -956,7 +978,7 @@ public:
             !_board[color ? D8 : D1])
         {
           assert(_board[color ? A8 : A1] == (color|Rook));
-          AddMove(*mv);
+          AddMove(color, *mv);
         }
         break;
       default:
@@ -965,12 +987,277 @@ public:
     }
   }
   template<Color color>
+  int GetCheckEvasions() {
+    assert(IS_SQUARE(_king[color]));
+    assert(_board[_king[color]] == (color|King));
+    int attackers = 0;
+    int squareCount = 0;
+    int squares[40];
+    int xrayCount = 0;
+    int xray[4] = {-1,-1,-1,-1};
+    if (_sliderCount[!color]) {
+      memset(atkDir, 0, sizeof(atkDir));
+    }
+    const Move* mv = _knightMoves[_king[color]];
+    for (; *mv; ++mv) {
+      assert(mv->Valid());
+      assert(mv->Type() == KnightMove);
+      assert(mv->From() == _king[color]);
+      if (_board[mv->To()] == ((!color)|Knight)) {
+        attackers++;
+        assert(squareCount < 40);
+        squares[squareCount++] = mv->To();
+      }
+    }
+    Move** mvs = _queenMoves[_king[color]];
+    for (int i = 0; (i < 8) && mvs[i]; ++i) {
+      int firstPiece = 0;
+      int pinnedSquare = -1;
+      int newSquareCount = squareCount;
+      for (mv = mvs[i]; *mv; ++mv) {
+        assert(mv->Valid());
+        assert(mv->Type() == QueenMove);
+        assert(mv->From() == _king[color]);
+        if (firstPiece) {
+          assert(COLOR(firstPiece) == color);
+          assert(IS_SQUARE(pinnedSquare));
+          assert(_board[pinnedSquare] == firstPiece);
+          const int pc = _board[mv->To()];
+          if (pc) {
+            if ((COLOR(pc) == color) || (pc < Bishop) || (pc >= King)) {
+              break;
+            }
+            const int dir = _dir[mv->From()][mv->To()];
+            switch (dir) {
+            case SouthWest: case SouthEast: case NorthWest: case NorthEast:
+              if ((pc == ((!color)|Bishop)) || (pc == ((!color)|Queen))) {
+                atkDir[pinnedSquare] = abs(dir);
+              }
+              break;
+            case South: case West: case East: case North:
+              if ((pc == ((!color)|Rook)) || (pc == ((!color)|Queen))) {
+                atkDir[pinnedSquare] = abs(dir);
+              }
+              break;
+            default:
+              assert(false);
+            }
+            break;
+          }
+        }
+        else {
+          assert(squareCount < 40);
+          squares[squareCount++] = mv->To();
+          if ((firstPiece = _board[mv->To()])) {
+            if (COLOR(firstPiece) == color) {
+              if (_sliderCount[!color]) {
+                pinnedSquare = mv->To();
+              }
+              else {
+                break;
+              }
+            }
+            else {
+              switch (firstPiece) {
+              case ((!color)|Pawn):
+                if (_dist[mv->From()][mv->To()] == 1) {
+                  if (color) {
+                    switch (_dir[mv->From()][mv->To()]) {
+                    case SouthWest: case SouthEast:
+                      attackers++;
+                      newSquareCount = squareCount;
+                      break;
+                    }
+                  }
+                  else {
+                    switch (_dir[mv->From()][mv->To()]) {
+                    case NorthWest: case NorthEast:
+                      attackers++;
+                      newSquareCount = squareCount;
+                      break;
+                    }
+                  }
+                }
+                break;
+              case ((!color)|Bishop):
+              case ((!color)|Rook):
+              case ((!color)|Queen):
+                attackers++;
+                assert(xrayCount < 4);
+                xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
+                newSquareCount = squareCount;
+                break;
+              }
+              break;
+            }
+          }
+          else if (_dist[mv->To()][_king[color]] == 1) {
+            assert(xrayCount < 4);
+            xray[xrayCount++] = mv->To();
+          }
+        }
+      }
+      squareCount = newSquareCount;
+    }
+    if (attackers) {
+      Print();
+    }
+    switch (attackers) {
+    case 1:
+      // get non-king moves that block or capture the piece giving check
+      for (int z = 0; z < squareCount; ++z) {
+        const int to = squares[z];
+        assert(IS_SQUARE(to));
+        const int cap = _board[to];
+        if ((cap == ((!color)|Pawn)) &&
+            (ep == (to + (color ? South : North))))
+        {
+          if (XC(ep) > 0) {
+            const int from = (ep + (color ? NorthWest : SouthWest));
+            if ((_board[from] == (color|Pawn)) /*&& TODO
+                !Pinned<color>(from, ep, Move::EnPassant)*/)
+            {
+              AddMove(color, Move().Set(PawnCap, from, ep));
+            }
+          }
+          if (XC(ep) < 7) {
+            const int from = (ep + (color ? NorthEast : SouthEast));
+            if ((_board[from] == (color|Pawn)) /*&& TODO
+                !Pinned<color>(from, ep, Move::EnPassant)*/)
+            {
+              AddMove(color, Move().Set(PawnCap, from, ep));
+            }
+          }
+        }
+        for (mv = _knightMoves[to]; *mv; ++mv) {
+          assert(mv->Valid());
+          assert(mv->Type() == KnightMove);
+          assert(mv->From() == to);
+          if (_board[mv->To()] == (color|Knight)) {
+            AddMove(color, Move().Set(KnightMove, mv->To(), to, cap));
+          }
+        }
+        mvs = _bishopMoves[to];
+        for (int i = 0; (i < 4) && mvs[i]; ++i) {
+          for (mv = mvs[i]; *mv; ++mv) {
+            assert(mv->Valid());
+            assert(mv->Type() == BishopMove);
+            assert(mv->From() == to);
+            const int from = mv->To();
+            switch (_board[from]) {
+            case (color|Pawn):
+              if (cap && (color ? (from > to) : (from < to)) &&
+                  (_dist[from][to] == 1))
+              {
+                if (YC(to) == (color ? 0 : 7)) {
+                  AddMove(color, Move().Set(PawnCap, from, to, cap,
+                                            (color|Queen)));
+                  AddMove(color, Move().Set(PawnCap, from, to, cap,
+                                            (color|Rook)));
+                  AddMove(color, Move().Set(PawnCap, from, to, cap,
+                                            (color|Bishop)));
+                  AddMove(color, Move().Set(PawnCap, from, to, cap,
+                                            (color|Knight)));
+                }
+                else {
+                  AddMove(color, Move().Set(PawnCap, from, to, cap));
+                }
+              }
+              break;
+            case (color|Bishop):
+              AddMove(color, Move().Set(BishopMove, from, to, cap));
+              break;
+            case (color|Queen):
+              AddMove(color, Move().Set(QueenMove, from, to, cap));
+              break;
+            }
+            if (_board[from]) {
+              break;
+            }
+          }
+        }
+        mvs = _rookMoves[to];
+        for (int i = 0; (i < 4) && mvs[i]; ++i) {
+          for (mv = mvs[i]; *mv; ++mv) {
+            assert(mv->Valid());
+            assert(mv->Type() == RookMove);
+            assert(mv->From() == to);
+            const int from = mv->To();
+            switch (_board[from]) {
+            case (color|Pawn):
+              if (!cap && (_dir[from][to] == (color ? South : North))) {
+                if (_dist[from][to] == 1) {
+                  if (YC(to) == (color ? 0 : 7)) {
+                    AddMove(color, Move().Set(PawnMove, from, to, 0,
+                                              (color|Queen)));
+                    AddMove(color, Move().Set(PawnMove, from, to, 0,
+                                              (color|Rook)));
+                    AddMove(color, Move().Set(PawnMove, from, to, 0,
+                                              (color|Bishop)));
+                    AddMove(color, Move().Set(PawnMove, from, to, 0,
+                                              (color|Knight)));
+                  }
+                  else {
+                    AddMove(color, Move().Set(PawnMove, from, to));
+                  }
+                }
+                else if ((_dist[from][to] == 2) &&
+                         (YC(to) == (color ? 4 : 3)))
+                {
+                  AddMove(color, Move().Set(PawnLung, from, to));
+                }
+              }
+              break;
+            case (color|Rook):
+              AddMove(color, Move().Set(RookMove, from, to, cap));
+              break;
+            case (color|Queen):
+              AddMove(color, Move().Set(QueenMove, from, to, cap));
+              break;
+            }
+            if (_board[from]) {
+              break;
+            }
+          }
+        }
+      }
+      // fall through
+    default:
+      // get king moves
+      for (mv = _kingMoves[_king[color]][color]; *mv; ++mv) {
+        assert(mv->Valid());
+        assert(mv->From() == _king[color]);
+        assert(_board[mv->From()] == (color|King));
+        if (mv->Type() != KingMove) {
+          continue;
+        }
+        const int to = mv->To();
+        if ((to == xray[0]) || (to == xray[1]) ||
+            (to == xray[2]) || (to == xray[3]))
+        {
+          continue;
+        }
+        const int cap = _board[to];
+        if (!cap) {
+          AddMove(color, *mv);
+        }
+        else if (COLOR(cap) != color) {
+          AddMove(color, *mv, cap, 0);
+        }
+      }
+    }
+    return attackers;
+  }
+  template<Color color>
   int GenerateMoves() {
     assert((_pieceCount[White] > 0) && (_pieceCount[White] <= 16));
     assert((_pieceCount[Black] > 0) && (_pieceCount[Black] <= 16));
     assert((_sliderCount[White] > 0) && (_sliderCount[White] < 12));
     assert((_sliderCount[Black] > 0) && (_sliderCount[Black] < 12));
     moveCount = moveIndex = 0;
+    if (GetCheckEvasions<color>()) {
+      return moveCount;
+    }
     int pieces = _pieceCount[color];
     int sliders = _sliderCount[color];
     for (int sqr = A1; sqr <= H8; ++sqr) {
@@ -1063,6 +1350,7 @@ private:
   int ply;
   int state;
   int ep;
+  int atkDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];
