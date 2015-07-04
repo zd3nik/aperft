@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef WIN32
+#include <sys/time.h>
+#endif
 
 //-----------------------------------------------------------------------------
 #define COLOR(x)      static_cast<Color>((x) & 1)
@@ -129,7 +132,94 @@ const int _TOUCH[64] = {
 };
 
 //-----------------------------------------------------------------------------
+int _dist[64][64] = {0};
+int _dir[64][64] = {0};
 int _board[64] = {0};
+int _king[2] = {0};
+int _pieceCount[2] = {0};
+int _sliderCount[2] = {0};
+
+//--------------------------------------------------------------------------
+void InitDistDir() {
+  memset(_dir, 0, sizeof(_dir));
+  memset(_dist, 0, sizeof(_dist));
+  for (int a = 0; a < 64; ++a) {
+    for (int b = 0; b < 64; ++b) {
+      const int x1 = XC(a);
+      const int y1 = YC(a);
+      const int x2 = XC(b);
+      const int y2 = YC(b);
+      const int d1 = abs(x1 - x2);
+      const int d2 = abs(y1 - y2);
+      _dist[a][b]  = std::max<int>(d1, d2);
+      if (x1 == x2) {
+        if (y1 > y2) {
+          _dir[a][b] = South;
+        }
+        else if (y1 < y2) {
+          _dir[a][b] = North;
+        }
+      }
+      else if (y1 == y2) {
+        if (x1 > x2) {
+          _dir[a][b] = West;
+        }
+        else if (x1 < x2) {
+          _dir[a][b] = East;
+        }
+      }
+      else if (x1 > x2) {
+        if (y1 > y2) {
+          if (((SQR(x1, y1) - SQR(x2, y2)) % 9) == 0) {
+            _dir[a][b] = SouthWest;
+          }
+        }
+        else if (y1 < y2) {
+          if (((SQR(x2, y2) - SQR(x1, y1)) % 7) == 0) {
+            _dir[a][b] = NorthWest;
+          }
+        }
+      }
+      else if (x1 < x2) {
+        if (y1 > y2) {
+          if (((SQR(x1, y1) - SQR(x2, y2)) % 7) == 0) {
+            _dir[a][b] = SouthEast;
+          }
+        }
+        else if (y1 < y2) {
+          if (((SQR(x2, y2) - SQR(x1, y1)) % 9) == 0) {
+            _dir[a][b] = NorthEast;
+          }
+        }
+      }
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+int Distance(const int from, const int to) {
+  assert(IS_SQUARE(from));
+  assert(IS_SQUARE(to));
+  return _dist[from][to];
+}
+
+//-----------------------------------------------------------------------------
+int Direction(const int from, const int to) {
+  assert(IS_SQUARE(from));
+  assert(IS_SQUARE(to));
+  return _dir[from][to];
+}
+
+//-----------------------------------------------------------------------------
+uint64_t Now() {
+#ifdef WIN32
+  return static_cast<uint64_t>(GetTickCount());
+#else
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return static_cast<uint64_t>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+#endif
+}
 
 //-----------------------------------------------------------------------------
 std::string SquareStr(const int sqr) {
@@ -309,6 +399,9 @@ public:
   }
   bool LoadFEN(const char* fen) {
     memset(_board, 0, sizeof(_board));
+    memset(_king, 0, sizeof(_king));
+    memset(_pieceCount, 0, sizeof(_pieceCount));
+    memset(_sliderCount, 0, sizeof(_sliderCount));
     state = 0;
     ep = 0;
     const char* p = fen;
@@ -323,18 +416,62 @@ public:
         }
         else {
           switch (*p) {
-          case 'b': _board[SQR(x, y)] = (Black|Bishop); break;
-          case 'B': _board[SQR(x, y)] = (White|Bishop); break;
-          case 'k': _board[SQR(x, y)] = (Black|King);   break;
-          case 'K': _board[SQR(x, y)] = (White|King);   break;
-          case 'n': _board[SQR(x, y)] = (Black|Knight); break;
-          case 'N': _board[SQR(x, y)] = (White|Knight); break;
-          case 'p': _board[SQR(x, y)] = (Black|Pawn);   break;
-          case 'P': _board[SQR(x, y)] = (White|Pawn);   break;
-          case 'q': _board[SQR(x, y)] = (Black|Queen);  break;
-          case 'Q': _board[SQR(x, y)] = (White|Queen);  break;
-          case 'r': _board[SQR(x, y)] = (Black|Rook);   break;
-          case 'R': _board[SQR(x, y)] = (White|Rook);   break;
+          case 'b':
+            _board[SQR(x, y)] = (Black|Bishop);
+            _pieceCount[Black]++;
+            _sliderCount[Black]++;
+            break;
+          case 'B':
+            _board[SQR(x, y)] = (White|Bishop);
+            _pieceCount[White]++;
+            _sliderCount[White]++;
+            break;
+          case 'k':
+            _board[SQR(x, y)] = (Black|King);
+            _king[Black] = SQR(x, y);
+            _pieceCount[Black]++;
+            break;
+          case 'K':
+            _board[SQR(x, y)] = (White|King);
+            _king[White] = SQR(x, y);
+            _pieceCount[White]++;
+            break;
+          case 'n':
+            _board[SQR(x, y)] = (Black|Knight);
+            _pieceCount[Black]++;
+            break;
+          case 'N':
+            _board[SQR(x, y)] = (White|Knight);
+            _pieceCount[White]++;
+            break;
+          case 'p':
+            _board[SQR(x, y)] = (Black|Pawn);
+            _pieceCount[Black]++;
+            break;
+          case 'P':
+            _board[SQR(x, y)] = (White|Pawn);
+            _pieceCount[White]++;
+            break;
+          case 'q':
+            _board[SQR(x, y)] = (Black|Queen);
+            _pieceCount[Black]++;
+            _sliderCount[Black]++;
+            break;
+          case 'Q':
+            _board[SQR(x, y)] = (White|Queen);
+            _pieceCount[White]++;
+            _sliderCount[White]++;
+            break;
+          case 'r':
+            _board[SQR(x, y)] = (Black|Rook);
+            _pieceCount[Black]++;
+            _sliderCount[Black]++;
+            break;
+          case 'R':
+            _board[SQR(x, y)] = (White|Rook);
+            _pieceCount[White]++;
+            _sliderCount[White]++;
+            break;
           default:
             std::cout << "Invalid character at " << p << std::endl;
             return false;
@@ -448,6 +585,8 @@ public:
           assert(ep && (move.To() == ep));
           assert(_board[ep + (color ? North : South)] == ((!color)|Pawn));
           _board[ep + (color ? North : South)] = 0;
+          _pieceCount[!color]--;
+          assert(_pieceCount[!color] > 0);
         }
       }
       dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
@@ -491,15 +630,18 @@ public:
       break;
     case KingMove:
       assert(_board[move.From()] == (color|King));
+      assert(_king[color] == move.From());
       assert(!move.Promo());
       _board[move.From()] = 0;
       _board[move.To()] = (color|King);
+      _king[color] = move.To();
       dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
       dest.ep = 0;
       break;
     case CastleShort:
       assert(move.From() == (color ? E8 : E1));
       assert(move.To() == (color ? G8 : G1));
+      assert(_king[color] == move.From());
       assert(!move.Cap());
       assert(!move.Promo());
       assert(_board[color ? E8 : E1] == (color|King));
@@ -510,12 +652,14 @@ public:
       _board[color ? F8 : F1] = (color|Rook);
       _board[color ? G8 : G1] = (color|King);
       _board[color ? H8 : H1] = 0;
+      _king[color] = (color ? G8 : G1);
       dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
       dest.ep = 0;
       break;
     case CastleLong:
       assert(move.From() == (color ? E8 : E1));
       assert(move.To() == (color ? C8 : C1));
+      assert(_king[color] == move.From());
       assert(!move.Cap());
       assert(!move.Promo());
       assert(_board[color ? E8 : E1] == (color|King));
@@ -527,11 +671,25 @@ public:
       _board[color ? C8 : C1] = (color|King);
       _board[color ? D8 : D1] = (color|Rook);
       _board[color ? E8 : E1] = 0;
+      _king[color] = (color ? C8 : C1);
       dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
       dest.ep = 0;
       break;
     default:
       assert(false);
+    }
+    if (move.Cap()) {
+      _pieceCount[!color]--;
+      assert(_pieceCount[!color] > 0);
+      if (move.Cap() >= Bishop) {
+        _sliderCount[!color]--;
+        assert(_sliderCount[!color] >= 0);
+      }
+    }
+    if (move.Promo()) {
+      _sliderCount[color]++;
+      assert(_sliderCount[color] > 0);
+      assert(_sliderCount[color] < 12);
     }
   }
   template<Color color>
@@ -552,11 +710,16 @@ public:
       break;
     case PawnCap:
       _board[move.From()] = (color|Pawn);
-      _board[move.To()] = 0;
-      if (!move.Cap()) {
+      if (move.Cap()) {
+        _board[move.To()] = move.Cap();
+      }
+      else {
         assert(ep && (move.To() == ep));
         assert(!_board[ep + (color ? North : South)] == ((!color)|Pawn));
+        _board[move.To()] = 0;
         _board[ep + (color ? North : South)] = ((!color)|Pawn);
+        _pieceCount[!color]++;
+        assert(_pieceCount[!color] <= 16);
       }
       break;
     case KnightMove:
@@ -581,12 +744,15 @@ public:
       break;
     case KingMove:
       assert(_board[move.To()] == (color|King));
+      assert(_king[color] == move.To());
       _board[move.From()] = (color|King);
       _board[move.To()] = move.Cap();
+      _king[color] = move.From();
       break;
     case CastleShort:
       assert(move.From() == (color ? E8 : E1));
       assert(move.To() == (color ? G8 : G1));
+      assert(_king[color] == move.To());
       assert(!move.Cap());
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
@@ -597,10 +763,12 @@ public:
       _board[color ? F8 : F1] = 0;
       _board[color ? G8 : G1] = 0;
       _board[color ? H8 : H1] = (color|Rook);
+      _king[color] = move.From();
       break;
     case CastleLong:
       assert(move.From() == (color ? E8 : E1));
       assert(move.To() == (color ? C8 : C1));
+      assert(_king[color] == move.To());
       assert(!move.Cap());
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
@@ -612,9 +780,23 @@ public:
       _board[color ? C8 : C1] = 0;
       _board[color ? D8 : D1] = 0;
       _board[color ? E8 : E1] = (color|King);
+      _king[color] = move.From();
       break;
     default:
       assert(false);
+    }
+    if (move.Cap()) {
+      _pieceCount[!color]++;
+      assert(_pieceCount[!color] <= 16);
+      if (move.Cap() >= Bishop) {
+        _sliderCount[!color]++;
+        assert(_sliderCount[!color] < 12);
+      }
+    }
+    if (move.Promo()) {
+      _sliderCount[color]--;
+      assert(_sliderCount[color] > 0);
+      assert(_sliderCount[color] < 12);
     }
   }
   Move& AddMove(const Move& move) {
@@ -784,19 +966,54 @@ public:
   }
   template<Color color>
   int GenerateMoves() {
+    assert((_pieceCount[White] > 0) && (_pieceCount[White] <= 16));
+    assert((_pieceCount[Black] > 0) && (_pieceCount[Black] <= 16));
+    assert((_sliderCount[White] > 0) && (_sliderCount[White] < 12));
+    assert((_sliderCount[Black] > 0) && (_sliderCount[Black] < 12));
     moveCount = moveIndex = 0;
+    int pieces = _pieceCount[color];
+    int sliders = _sliderCount[color];
     for (int sqr = A1; sqr <= H8; ++sqr) {
       switch (_board[sqr]) {
-      case (color|Pawn):   GetPawnMoves<color>(_pawnMoves[sqr][color]); break;
-      case (color|Knight): GetKnightMoves(color, _knightMoves[sqr]);    break;
-      case (color|Bishop): GetBishopMoves(color, _bishopMoves[sqr]);    break;
-      case (color|Rook):   GetRookMoves(color, _rookMoves[sqr]);        break;
-      case (color|Queen):  GetQueenMoves(color, _queenMoves[sqr]);      break;
-      case (color|King):   GetKingMoves<color>(_kingMoves[sqr][color]); break;
+      case (color|Pawn):
+        GetPawnMoves<color>(_pawnMoves[sqr][color]);
+        pieces--;
+        break;
+      case (color|Knight):
+        GetKnightMoves(color, _knightMoves[sqr]);
+        pieces--;
+        break;
+      case (color|Bishop):
+        GetBishopMoves(color, _bishopMoves[sqr]);
+        pieces--;
+        sliders--;
+        break;
+      case (color|Rook):
+        GetRookMoves(color, _rookMoves[sqr]);
+        pieces--;
+        sliders--;
+        break;
+      case (color|Queen):
+        GetQueenMoves(color, _queenMoves[sqr]);
+        pieces--;
+        sliders--;
+        break;
+      case (color|King):
+        assert(_king[color] == sqr);
+        GetKingMoves<color>(_kingMoves[sqr][color]);
+        pieces--;
+        break;
       default:
         assert(!_board[sqr] || (COLOR(_board[sqr]) != color));
       }
+#ifdef NDEBUG
+      if (!pieces) {
+        break;
+      }
+#endif
     }
+    assert(pieces == 0);
+    assert(sliders == 0);
     return moveCount;
   }
   template<Color color>
@@ -1110,6 +1327,7 @@ int main(int argc, char* argv[])
     return 2;
   }
   std::cout << "Initializing" << std::endl;
+  InitDistDir();
   InitNodeStack();
   InitMoveStack();
   std::cout << "Loading '" << fen << "'" << std::endl;
@@ -1118,9 +1336,12 @@ int main(int argc, char* argv[])
   }
   _nodes[0].Print();
   std::cout << "Calculating perft to depth " << depth << std::endl;
+  uint64_t start = Now();
   uint64_t count = ((_nodes[0].ColorToMove())
       ? _nodes[0].Perft<Black>(depth)
       : _nodes[0].Perft<White>(depth));
+  double elapsed = (double)(Now() - start);
   std::cout << "Total leafs = " << count << std::endl;
+  std::cout << " KNodes/sec = " << (((double)count) / elapsed) << std::endl;
   return 0;
 }
