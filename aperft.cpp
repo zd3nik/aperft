@@ -16,7 +16,7 @@
 #define IS_KING(x)    ((Black|(x)) == (Black|King))
 #define IS_CAP(x)     (((x) >= (White|Pawn)) && ((x) <= (Black|Queen)))
 #define IS_PROMO(x)   (((x) >= (White|Knight)) && ((x) <= (Black|Queen)))
-#define IS_MTYPE(x)   (((x) >= KingMove) && ((x) <= PawnCap))
+#define IS_MTYPE(x)   (((x) >= PawnMove) && ((x) <= CastleLong))
 #define IS_COORD(x)   (((x) >= 0) && ((x) < 8))
 #define IS_X(x)       (((x) >= 'a') && ((x) <= 'h'))
 #define IS_Y(x)       (((x) >= '1') && ((x) <= '8'))
@@ -28,9 +28,6 @@
 
 //-----------------------------------------------------------------------------
 typedef bool Color;
-
-//-----------------------------------------------------------------------------
-int _board[64] = {0};
 
 //-----------------------------------------------------------------------------
 enum Limits {
@@ -82,24 +79,26 @@ enum PieceType {
 //-----------------------------------------------------------------------------
 enum MoveType {
   NoMove,
-  KingMove,
-  CastleShort,
-  CastleLong,
+  PawnMove,
+  PawnLung,
+  PawnCap,
   KnightMove,
   BishopMove,
   RookMove,
   QueenMove,
-  PawnMove,
-  PawnLung,
-  PawnCap
+  KingMove,
+  CastleShort,
+  CastleLong
 };
 
 //-----------------------------------------------------------------------------
 enum CastleRights {
-  WhiteShort = 0x02,
-  WhiteLong  = 0x04,
-  BlackShort = 0x08,
-  BlackLong  = 0x10
+  WhiteShort  = 0x02,
+  WhiteLong   = 0x04,
+  WhiteCastle = 0x06,
+  BlackShort  = 0x08,
+  BlackLong   = 0x10,
+  BlackCastle = 0x18
 };
 
 //-----------------------------------------------------------------------------
@@ -116,6 +115,21 @@ enum Shifts {
   CapShift   = 4+6+6,
   PromoShift = 4+6+6+4
 };
+
+//-----------------------------------------------------------------------------
+const int _TOUCH[64] = {
+  ~WhiteLong, ~0, ~0, ~0, ~WhiteCastle, ~0, ~0, ~WhiteShort,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0,
+  ~BlackLong, ~0, ~0, ~0, ~BlackCastle, ~0, ~0, ~BlackShort
+};
+
+//-----------------------------------------------------------------------------
+int _board[64] = {0};
 
 //-----------------------------------------------------------------------------
 std::string SquareStr(const int sqr) {
@@ -141,11 +155,11 @@ public:
   void Set(const int type, const int from, const int to,
            const int cap = 0, const int promo = 0)
   {
-    desc = (static_cast<uint32_t>(type) |
-            static_cast<uint32_t>(from  <<  FromShift) |
-            static_cast<uint32_t>(to    <<    ToShift) |
-            static_cast<uint32_t>(cap   <<   CapShift) |
-            static_cast<uint32_t>(promo << PromoShift));
+    desc = (type                  |
+            (from  <<  FromShift) |
+            (to    <<    ToShift) |
+            (cap   <<   CapShift) |
+            (promo << PromoShift));
     assert(Type() == type);
     assert(From() == from);
     assert(To() == to);
@@ -156,9 +170,9 @@ public:
   void SetCapPromo(const int cap, const int promo) {
     assert(!cap || IS_CAP(cap));
     assert(!promo || IS_PROMO(promo));
-    desc = ((desc & TwentyBits) | // type, from, to
-            static_cast<uint32_t>(cap   <<   CapShift) |
-            static_cast<uint32_t>(promo << PromoShift));
+    desc = ((desc & TwentyBits)   | // type, from, to
+            (cap   <<   CapShift) |
+            (promo << PromoShift));
     assert(Cap() == cap);
     assert(Promo() == promo);
     Validate();
@@ -167,13 +181,13 @@ public:
   bool operator==(const Move& other) const { return (desc == other.desc); }
   bool operator!=(const Move& other) const { return (desc != other.desc); }
   operator bool() const { return desc; }
-  operator uint32_t() const { return desc; }
+  operator int() const { return desc; }
   bool Valid() const { return (Type() && (From() != To())); }
-  int Type() const { return static_cast<int>(desc & FourBits);  }
-  int From() const { return static_cast<int>((desc >> FromShift) & SixBits); }
-  int To() const { return static_cast<int>((desc >> ToShift) & SixBits); }
-  int Cap() const { return static_cast<int>((desc >> CapShift) & FourBits); }
-  int Promo() const { return static_cast<int>((desc>>PromoShift) & FourBits); }
+  int Type() const { return (desc & FourBits);  }
+  int From() const { return ((desc >> FromShift) & SixBits); }
+  int To() const { return ((desc >> ToShift) & SixBits); }
+  int Cap() const { return ((desc >> CapShift) & FourBits); }
+  int Promo() const { return ((desc >> PromoShift) & FourBits); }
   std::string ToString() const {
     char sbuf[6];
     sbuf[0] = ('a' + XC(From()));
@@ -195,7 +209,7 @@ public:
     return (strcmp(ToString().c_str(), other.ToString().c_str()) < 0);
   }
 private:
-  uint32_t desc;
+  int desc;
   void Validate() const {
 #ifndef NDEBUG
     if (desc) {
@@ -249,7 +263,7 @@ public:
   Node* Parent() const { return parent; }
   Node* Child() const { return child; }
   int Ply() const { return ply; }
-  int ColorToMove() const { return COLOR(state); }
+  int ColorToMove() const { return (state & 1); }
   int EpSquare() const { return ep; }
   void Print() const {
     std::cout << std::endl;
@@ -378,13 +392,230 @@ public:
     return true;
   }
   template<Color color>
-  bool Exec(const Move& /*move*/, Node& /*dest*/) const {
-    // TODO
-    return false;
+  void Exec(const Move& move, Node& dest) const {
+    assert(ColorToMove() == color);
+    assert(move.Valid());
+    assert(!move.Cap() || IS_CAP(move.Cap()));
+    assert(!move.Cap() || COLOR(move.Cap()) != color);
+    assert(!move.Promo() || IS_PROMO(move.Promo()));
+    assert(!move.Promo() || COLOR(move.Promo()) != color);
+    assert(_board[move.To()] == move.Cap());
+    switch (move.Type()) {
+    case PawnMove:
+      assert(_board[move.From()] == (color|Pawn));
+      assert(!_board[move.To()]);
+      assert(!move.Cap());
+      _board[move.From()] = 0;
+      if (move.Promo()) {
+        assert(IS_PROMO(move.Promo()));
+        assert(COLOR(move.Promo()) == color);
+        assert(YC(move.To()) == (color ? 0 : 7));
+        _board[move.To()] = move.Promo();
+      }
+      else {
+        assert(YC(move.To()) != (color ? 0 : 7));
+        _board[move.To()] = (color|Pawn);
+      }
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case PawnLung:
+      assert(_board[move.From()] == (color|Pawn));
+      assert(YC(move.From()) == (color ? 6 : 1));
+      assert(!_board[move.To()]);
+      assert(!_board[move.To() + (color ? North : South)]);
+      assert(!move.Cap());
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|Pawn);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = (move.To() + (color ? North : South));
+      break;
+    case PawnCap:
+      assert(_board[move.From()] == (color|Pawn));
+      _board[move.From()] = 0;
+      if (move.Promo()) {
+        assert(IS_PROMO(move.Promo()));
+        assert(COLOR(move.Promo()) == color);
+        assert(YC(move.To()) == (color ? 0 : 7));
+        assert(move.Cap());
+        _board[move.To()] = move.Promo();
+      }
+      else {
+        assert(YC(move.To()) != (color ? 0 : 7));
+        _board[move.To()] = (color|Pawn);
+        if (!move.Cap()) {
+          assert(ep && (move.To() == ep));
+          assert(_board[ep + (color ? North : South)] == ((!color)|Pawn));
+          _board[ep + (color ? North : South)] = 0;
+        }
+      }
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case KnightMove:
+      assert(_board[move.From()] == (color|Knight));
+      assert(_board[move.To()] == move.Cap());
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|Knight);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case BishopMove:
+      assert(_board[move.From()] == (color|Bishop));
+      assert(_board[move.To()] == move.Cap());
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|Bishop);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case RookMove:
+      assert(_board[move.From()] == (color|Rook));
+      assert(_board[move.To()] == move.Cap());
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|Rook);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case QueenMove:
+      assert(_board[move.From()] == (color|Queen));
+      assert(_board[move.To()] == move.Cap());
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|Queen);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case KingMove:
+      assert(_board[move.From()] == (color|King));
+      assert(!move.Promo());
+      _board[move.From()] = 0;
+      _board[move.To()] = (color|King);
+      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.ep = 0;
+      break;
+    case CastleShort:
+      assert(move.From() == (color ? E8 : E1));
+      assert(move.To() == (color ? G8 : G1));
+      assert(!move.Cap());
+      assert(!move.Promo());
+      assert(_board[color ? E8 : E1] == (color|King));
+      assert(_board[color ? H8 : H1] == (color|Rook));
+      assert(!_board[color ? F8 : F1]);
+      assert(!_board[color ? G8 : G1]); // TODO check attacked squares
+      _board[color ? E8 : E1] = 0;
+      _board[color ? F8 : F1] = (color|Rook);
+      _board[color ? G8 : G1] = (color|King);
+      _board[color ? H8 : H1] = 0;
+      dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
+      dest.ep = 0;
+      break;
+    case CastleLong:
+      assert(move.From() == (color ? E8 : E1));
+      assert(move.To() == (color ? C8 : C1));
+      assert(!move.Cap());
+      assert(!move.Promo());
+      assert(_board[color ? E8 : E1] == (color|King));
+      assert(_board[color ? A8 : A1] == (color|Rook));
+      assert(!_board[color ? B8 : B1]);
+      assert(!_board[color ? C8 : C1]);
+      assert(!_board[color ? D8 : D1]); // TODO check attacked squares
+      _board[color ? A8 : A1] = 0;
+      _board[color ? C8 : C1] = (color|King);
+      _board[color ? D8 : D1] = (color|Rook);
+      _board[color ? E8 : E1] = 0;
+      dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
+      dest.ep = 0;
+      break;
+    default:
+      assert(false);
+    }
   }
   template<Color color>
-  void Undo(const Move& /*move*/) const {
-    // TODO
+  void Undo(const Move& move) const {
+    assert(ColorToMove() == color);
+    assert(move.Valid());
+    assert(!move.Cap() || IS_CAP(move.Cap()));
+    assert(!move.Cap() || COLOR(move.Cap()) != color);
+    assert(!move.Promo() || IS_PROMO(move.Promo()));
+    assert(!move.Promo() || COLOR(move.Promo()) != color);
+    assert(!_board[move.From()]);
+    switch (move.Type()) {
+    case PawnMove:
+    case PawnLung:
+      assert(!move.Cap());
+      _board[move.From()] = (color|Pawn);
+      _board[move.To()] = 0;
+      break;
+    case PawnCap:
+      _board[move.From()] = (color|Pawn);
+      _board[move.To()] = 0;
+      if (!move.Cap()) {
+        assert(ep && (move.To() == ep));
+        assert(!_board[ep + (color ? North : South)] == ((!color)|Pawn));
+        _board[ep + (color ? North : South)] = ((!color)|Pawn);
+      }
+      break;
+    case KnightMove:
+      assert(_board[move.To()] == (color|Knight));
+      _board[move.From()] = (color|Knight);
+      _board[move.To()] = move.Cap();
+      break;
+    case BishopMove:
+      assert(_board[move.To()] == (color|Bishop));
+      _board[move.From()] = (color|Bishop);
+      _board[move.To()] = move.Cap();
+      break;
+    case RookMove:
+      assert(_board[move.To()] == (color|Rook));
+      _board[move.From()] = (color|Rook);
+      _board[move.To()] = move.Cap();
+      break;
+    case QueenMove:
+      assert(_board[move.To()] == (color|Queen));
+      _board[move.From()] = (color|Queen);
+      _board[move.To()] = move.Cap();
+      break;
+    case KingMove:
+      assert(_board[move.To()] == (color|King));
+      _board[move.From()] = (color|King);
+      _board[move.To()] = move.Cap();
+      break;
+    case CastleShort:
+      assert(move.From() == (color ? E8 : E1));
+      assert(move.To() == (color ? G8 : G1));
+      assert(!move.Cap());
+      assert(!move.Promo());
+      assert(!_board[color ? E8 : E1]);
+      assert(!_board[color ? H8 : H1]);
+      assert(_board[color ? F8 : F1] == (color|Rook));
+      assert(_board[color ? G8 : G1] == (color|King));
+      _board[color ? E8 : E1] = (color|King);
+      _board[color ? F8 : F1] = 0;
+      _board[color ? G8 : G1] = 0;
+      _board[color ? H8 : H1] = (color|Rook);
+      break;
+    case CastleLong:
+      assert(move.From() == (color ? E8 : E1));
+      assert(move.To() == (color ? C8 : C1));
+      assert(!move.Cap());
+      assert(!move.Promo());
+      assert(!_board[color ? E8 : E1]);
+      assert(!_board[color ? A8 : A1]);
+      assert(!_board[color ? B8 : B1]);
+      assert(_board[color ? C8 : C1] == (color|King));
+      assert(_board[color ? D8 : D1] == (color|Rook));
+      _board[color ? A8 : A1] = (color|Rook);
+      _board[color ? C8 : C1] = 0;
+      _board[color ? D8 : D1] = 0;
+      _board[color ? E8 : E1] = (color|King);
+      break;
+    default:
+      assert(false);
+    }
   }
   Move& AddMove(const Move& move) {
     assert(moveCount >= 0);
@@ -408,12 +639,12 @@ public:
           }
           else {
             AddMove(*mv);
-            if (mv[1].Type() == PawnLung) {
-              ++mv;
-              if (!_board[mv->To()]) {
-                AddMove(*mv);
-              }
-            }
+          }
+        }
+        if (mv[1].Type() == PawnLung) {
+          ++mv;
+          if (!cap && !_board[mv->To()]) {
+            AddMove(*mv);
           }
         }
         break;
@@ -584,12 +815,13 @@ public:
     return count;
   }
   template<Color color>
-  void Perft(const int depth) {
+  uint64_t Perft(const int depth) {
     assert(!ply);
     assert(!parent);
     assert(child);
     GenerateMoves<color>();
     std::sort(moves, (moves + moveCount));
+    uint64_t total = 0;
     if (depth > 1) {
       while (moveIndex < moveCount) {
         const Move& move = moves[moveIndex++];
@@ -597,13 +829,16 @@ public:
         const uint64_t count = child->PerftSearch<!color>(depth - 1);
         Undo<color>(move);
         std::cout << move.ToString() << ' ' << count << std::endl;
+        total += count;
       }
     }
     else {
       while (moveIndex < moveCount) {
         std::cout << moves[moveIndex++].ToString() << " 1 " << std::endl;
+        total++;
       }
     }
+    return total;
   }
 private:
   Node* parent;
@@ -883,12 +1118,9 @@ int main(int argc, char* argv[])
   }
   _nodes[0].Print();
   std::cout << "Calculating perft to depth " << depth << std::endl;
-  if (_nodes[0].ColorToMove()) {
-    _nodes[0].Perft<Black>(depth);
-  }
-  else {
-    _nodes[0].Perft<White>(depth);
-  }
+  uint64_t count = ((_nodes[0].ColorToMove())
+      ? _nodes[0].Perft<Black>(depth)
+      : _nodes[0].Perft<White>(depth));
+  std::cout << "Total leafs = " << count << std::endl;
   return 0;
 }
-
