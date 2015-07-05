@@ -1,3 +1,6 @@
+//----------------------------------------------------------------------------
+// Copyright (c) 2015 Shawn Chidester <zd3nik@gmail.com>, All rights reserved
+//----------------------------------------------------------------------------
 #include <algorithm>
 #include <iostream>
 #include <string>
