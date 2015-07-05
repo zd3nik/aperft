@@ -6,7 +6,9 @@
 #include <string>
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef WIN32
@@ -39,7 +41,7 @@ typedef bool Color;
 enum Limits {
   MaxPlies      = 100,
   MoveListSize  = 128,
-  MoveStackSize = 5532
+  MoveStackSize = 5576
 };
 
 //-----------------------------------------------------------------------------
@@ -630,7 +632,7 @@ public:
     assert(!move.Cap() || IS_CAP(move.Cap()));
     assert(!move.Cap() || COLOR(move.Cap()) != color);
     assert(!move.Promo() || IS_PROMO(move.Promo()));
-    assert(!move.Promo() || COLOR(move.Promo()) != color);
+    assert(!move.Promo() || COLOR(move.Promo()) == color);
     assert(_board[move.To()] == move.Cap());
     switch (move.Type()) {
     case PawnMove:
@@ -799,7 +801,7 @@ public:
     assert(!move.Cap() || IS_CAP(move.Cap()));
     assert(!move.Cap() || COLOR(move.Cap()) != color);
     assert(!move.Promo() || IS_PROMO(move.Promo()));
-    assert(!move.Promo() || COLOR(move.Promo()) != color);
+    assert(!move.Promo() || COLOR(move.Promo()) == color);
     assert(!_board[move.From()]);
     switch (move.Type()) {
     case PawnMove:
@@ -1550,7 +1552,7 @@ void StackPawnMoves(const int from, int& stackPos) {
   Move* first = NULL;
   Move* mv = NULL;
   int to = 0;
-  if ((YC(from) != 0) && (YC(from) != 7)) {
+  if (color ? (YC(from) > 0) : (YC(from) < 7)) {
     if (XC(from) > 0) {
       to = (from + (color ? SouthWest : NorthWest));
       (mv = StackMove(stackPos))->Set(PawnCap, from, to);
@@ -1748,18 +1750,96 @@ void InitMoveStack() {
 }
 
 //-----------------------------------------------------------------------------
-int main(int argc, char* argv[])
+uint64_t GetUnsigned64(const char*& str) {
+  uint64_t result = 0;
+  const char* p = NextWord(str);
+  while (*p && isdigit(*p)) {
+    const uint64_t prev = result;
+    result = ((10 * result) + (*p++ - '0'));
+    if (result < prev) {
+      std::cout << "value too large: " << str;
+      result = 0;
+      str = p;
+      break;
+    }
+  }
+  str = p;
+  return result;
+}
+
+//-----------------------------------------------------------------------------
+int GetDepth(const char*& str, uint64_t &expected) {
+  expected = 0;
+  int depth = 0;
+  const char* p = NextWord(str);
+  while (*p && isdigit(*p)) {
+    depth = ((10 * depth) + (*p++ - '0'));
+    if (depth < 0) {
+      std::cout << "invalid depth: " << str;
+      str = p;
+      return 0;
+    }
+  }
+  str = p;
+  if (depth && *str && isspace(*str)) {
+    expected = GetUnsigned64(str);
+  }
+  return depth;
+}
+
+//-----------------------------------------------------------------------------
+bool DoPerft(std::string fen,
+             const int max_depth = 0,
+             const uint64_t max_leafs = 0)
 {
-  if (argc < 3) {
-    std::cout << "usage: " << argv[0] << " {depth} {fen}" << std::endl;
+  std::cout << "Loading '" << fen << "'" << std::endl;
+  if (!_nodes[0].LoadFEN(fen.c_str())) {
+    return false;
+  }
+  _nodes[0].Print();
+  const char* p = strchr(fen.c_str(), ';');
+  while (p && p[1]) {
+    p = NextWord(p + 1);
+    if ((*p == 'D') && isdigit(p[1])) {
+      uint64_t leafs = 0;
+      int depth = GetDepth(++p, leafs);
+      if (!depth) depth = max_depth;
+      if ((!max_depth || (depth && (depth <= max_depth))) &&
+          (!max_leafs || (leafs && (leafs < max_leafs))))
+      {
+        std::cout << "Calculating perft to depth " << depth << std::endl;
+        if (leafs) {
+          std::cout << "       Expected leaf count " << leafs << std::endl;
+        }
+        const uint64_t start = Now();
+        const uint64_t count = ((_nodes[0].ColorToMove())
+            ? _nodes[0].Perft<Black>(depth)
+            : _nodes[0].Perft<White>(depth));
+        const double elapsed = (double)(Now() - start);
+        std::cout << "Total leafs = " << count << std::endl;
+        std::cout << " KLeafs/sec = " << (((double)count) / elapsed)
+                  << std::endl;
+        if (leafs && (count != leafs)) {
+          std::cout << "*** FAIL ***" << std::endl;
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+int HandleFEN(int argc, char* argv[]) {
+  if (argc < 4) {
     return 1;
   }
-  const int depth = atoi(argv[1]);
-  if ((depth < 0) || (!depth && (argv[1][0] != 0))) {
-    std::cout << "invalid depth: " << argv[1] << std::endl;
+  const int depth = atoi(argv[2]);
+  if ((depth < 0) || (!depth && (argv[2][0] != 0))) {
+    std::cout << "invalid depth: " << argv[2] << std::endl;
     return 2;
   }
-  std::string fen = argv[2];
+  std::string fen = argv[3];
   for (int i = 3; i < argc; ++i) {
     fen += ' ';
     fen += argv[i];
@@ -1768,22 +1848,63 @@ int main(int argc, char* argv[])
     std::cout << "empty fen string" << std::endl;
     return 2;
   }
+  return (DoPerft(fen, depth) ? 0 : 3);
+}
+
+//-----------------------------------------------------------------------------
+int HandleEPD(int argc, char* argv[]) {
+  if ((argc != 3) && (argc != 4)) {
+    return 1;
+  }
+  uint64_t max_leafs = 0;
+  if (argc == 4) {
+    const char* str = argv[3];
+    max_leafs = GetUnsigned64(str);
+    if (!max_leafs) {
+      return 1;
+    }
+  }
+  FILE* fp = NULL;
+  if (!(fp = fopen(argv[2], "r"))) {
+    std::cout << "Cannot open '" << argv[2] << "': " << strerror(errno);
+    return 2;
+  }
+  char fen[16384];
+  int positions = 0;
+  int result = 0;
+  for (int line = 1; fgets(fen, sizeof(fen), fp); ++line) {
+    const char* f = NextWord(fen);
+    if (!*f || (*f == '#')) {
+      continue;
+    }
+    if (!DoPerft(f, 0, max_leafs)) {
+      result = 3;
+      break;
+    }
+    positions++;
+  }
+  fclose(fp);
+  fp = NULL;
+  std::cout << positions << " positions tested" << std::endl;
+  return result;
+}
+
+//-----------------------------------------------------------------------------
+int main(int argc, char* argv[]) {
   std::cout << "Initializing" << std::endl;
   InitDistDir();
   InitNodeStack();
   InitMoveStack();
-  std::cout << "Loading '" << fen << "'" << std::endl;
-  if (!_nodes[0].LoadFEN(fen.c_str())) {
-    return 3;
+  int ret = 1;
+  if (!strcmp(argv[1], "fen")) {
+    ret = HandleFEN(argc, argv);
   }
-  _nodes[0].Print();
-  std::cout << "Calculating perft to depth " << depth << std::endl;
-  uint64_t start = Now();
-  uint64_t count = ((_nodes[0].ColorToMove())
-      ? _nodes[0].Perft<Black>(depth)
-      : _nodes[0].Perft<White>(depth));
-  double elapsed = (double)(Now() - start);
-  std::cout << "Total leafs = " << count << std::endl;
-  std::cout << " KLeafs/sec = " << (((double)count) / elapsed) << std::endl;
-  return 0;
+  else if (!strcmp(argv[1], "epd")) {
+    ret = HandleEPD(argc, argv);
+  }
+  if (ret == 1) {
+    std::cout << "usage: " << argv[0]
+              << " {fen <depth> <fen>} | {epd <file> [max_leafs]}" << std::endl;
+  }
+  return ret;
 }
