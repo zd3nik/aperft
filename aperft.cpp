@@ -1056,7 +1056,7 @@ public:
         }
         break;
       case CastleLong:
-        if (!cap && (state & (color ? BlackShort : WhiteShort)) &&
+        if (!cap && (state & (color ? BlackLong : WhiteLong)) &&
             !_board[color ? B8 : B1] &&
             !_board[color ? C8 : C1] && !AttackedBy<!color>(color ? C8 : C1) &&
             !_board[color ? D8 : D1] && !AttackedBy<!color>(color ? D8 : D1))
@@ -1788,8 +1788,28 @@ int GetDepth(const char*& str, uint64_t &expected) {
 }
 
 //-----------------------------------------------------------------------------
-bool DoPerft(std::string fen,
-             const int max_depth = 0,
+bool RunPerft(const int depth, const uint64_t leafs) {
+  std::cout << "Calculating perft to depth " << depth << std::endl;
+  if (leafs) {
+    std::cout << "       Expected leaf count " << leafs << std::endl;
+  }
+  const uint64_t start = Now();
+  const uint64_t count = ((_nodes[0].ColorToMove())
+      ? _nodes[0].Perft<Black>(depth)
+      : _nodes[0].Perft<White>(depth));
+  const double elapsed = (double)(Now() - start);
+  std::cout << "Total leafs = " << count << std::endl;
+  std::cout << " KLeafs/sec = " << (elapsed ? (((double)count) / elapsed) : 0)
+            << std::endl;
+  if (leafs && (count != leafs)) {
+    std::cout << "*** FAIL ***" << std::endl;
+    return false;
+  }
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+bool DoPerft(std::string fen, const int max_depth,
              const uint64_t max_leafs = 0)
 {
   std::cout << "Loading '" << fen << "'" << std::endl;
@@ -1798,6 +1818,9 @@ bool DoPerft(std::string fen,
   }
   _nodes[0].Print();
   const char* p = strchr(fen.c_str(), ';');
+  if (!p) {
+    return RunPerft(max_depth, max_leafs);
+  }
   while (p && p[1]) {
     p = NextWord(p + 1);
     if ((*p == 'D') && isdigit(p[1])) {
@@ -1807,24 +1830,12 @@ bool DoPerft(std::string fen,
       if ((!max_depth || (depth && (depth <= max_depth))) &&
           (!max_leafs || (leafs && (leafs < max_leafs))))
       {
-        std::cout << "Calculating perft to depth " << depth << std::endl;
-        if (leafs) {
-          std::cout << "       Expected leaf count " << leafs << std::endl;
-        }
-        const uint64_t start = Now();
-        const uint64_t count = ((_nodes[0].ColorToMove())
-            ? _nodes[0].Perft<Black>(depth)
-            : _nodes[0].Perft<White>(depth));
-        const double elapsed = (double)(Now() - start);
-        std::cout << "Total leafs = " << count << std::endl;
-        std::cout << " KLeafs/sec = " << (((double)count) / elapsed)
-                  << std::endl;
-        if (leafs && (count != leafs)) {
-          std::cout << "*** FAIL ***" << std::endl;
+        if (!RunPerft(depth, leafs)) {
           return false;
         }
       }
     }
+    p = strchr(p, ';');
   }
   return true;
 }
@@ -1840,7 +1851,7 @@ int HandleFEN(int argc, char* argv[]) {
     return 2;
   }
   std::string fen = argv[3];
-  for (int i = 3; i < argc; ++i) {
+  for (int i = 4; i < argc; ++i) {
     fen += ' ';
     fen += argv[i];
   }
@@ -1877,6 +1888,9 @@ int HandleEPD(int argc, char* argv[]) {
     if (!*f || (*f == '#')) {
       continue;
     }
+    char* p = fen;
+    while (*p) ++p;
+    while (p-- > f) { if (isspace(*p)) *p = 0; else break; }
     if (!DoPerft(f, 0, max_leafs)) {
       result = 3;
       break;
