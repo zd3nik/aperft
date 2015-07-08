@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef WIN32
+#ifdef WIN32
+#include "Windows.h"
+#else
 #include <sys/time.h>
 #endif
 
