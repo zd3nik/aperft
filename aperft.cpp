@@ -1790,7 +1790,7 @@ int GetDepth(const char*& str, uint64_t &expected) {
 }
 
 //-----------------------------------------------------------------------------
-bool RunPerft(const int depth, const uint64_t leafs) {
+bool RunPerft(const int depth, const uint64_t leafs, double& rate) {
   std::cout << "Calculating perft to depth " << depth << std::endl;
   if (leafs) {
     std::cout << "       Expected leaf count " << leafs << std::endl;
@@ -1800,9 +1800,10 @@ bool RunPerft(const int depth, const uint64_t leafs) {
       ? _nodes[0].Perft<Black>(depth)
       : _nodes[0].Perft<White>(depth));
   const double elapsed = (double)(Now() - start);
+  rate = (elapsed ? (((double)count) / elapsed) : 0);
   std::cout << "Total leafs = " << count << std::endl;
-  std::cout << " KLeafs/sec = " << (elapsed ? (((double)count) / elapsed) : 0)
-            << std::endl;
+  std::cout << " KLeafs/sec = " << rate << std::endl;
+  if (elapsed < 1000) rate = 0;
   if (leafs && (count != leafs)) {
     std::cout << "*** FAIL ***" << std::endl;
     return false;
@@ -1811,17 +1812,23 @@ bool RunPerft(const int depth, const uint64_t leafs) {
 }
 
 //-----------------------------------------------------------------------------
-bool DoPerft(std::string fen, const int max_depth,
-             const uint64_t max_leafs = 0)
+bool DoPerft(std::string fen, double& min_rate, double& max_rate,
+             const int max_depth, const uint64_t max_leafs = 0)
 {
   std::cout << "Loading '" << fen << "'" << std::endl;
   if (!_nodes[0].LoadFEN(fen.c_str())) {
     return false;
   }
   _nodes[0].Print();
+  double rate = 0;
   const char* p = strchr(fen.c_str(), ';');
   if (!p) {
-    return RunPerft(max_depth, max_leafs);
+    if (!RunPerft(max_depth, max_leafs, rate)) return false;
+    if (rate) {
+      if (!min_rate || (rate < min_rate)) min_rate = rate;
+      if (rate > max_rate) max_rate = rate;
+    }
+    return true;
   }
   while (p && p[1]) {
     p = NextWord(p + 1);
@@ -1832,8 +1839,12 @@ bool DoPerft(std::string fen, const int max_depth,
       if ((!max_depth || (depth && (depth <= max_depth))) &&
           (!max_leafs || (leafs && (leafs < max_leafs))))
       {
-        if (!RunPerft(depth, leafs)) {
+        if (!RunPerft(depth, leafs, rate)) {
           return false;
+        }
+        if (rate) {
+          if (!min_rate || (rate < min_rate)) min_rate = rate;
+          if (rate > max_rate) max_rate = rate;
         }
       }
     }
@@ -1861,7 +1872,12 @@ int HandleFEN(int argc, char* argv[]) {
     std::cout << "empty fen string" << std::endl;
     return 2;
   }
-  return (DoPerft(fen, depth) ? 0 : 3);
+  double min_rate = 0;
+  double max_rate = 0;
+  if (!DoPerft(fen, min_rate, max_rate, depth)) return 3;
+  std::cout << " min KLeafs/sec = " << min_rate << std::endl;
+  std::cout << " max KLeafs/sec = " << max_rate << std::endl;
+  return 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -1885,6 +1901,8 @@ int HandleEPD(int argc, char* argv[]) {
   char fen[16384];
   int positions = 0;
   int result = 0;
+  double min_rate = 0;
+  double max_rate = 0;
   for (int line = 1; fgets(fen, sizeof(fen), fp); ++line) {
     const char* f = NextWord(fen);
     if (!*f || (*f == '#')) {
@@ -1893,7 +1911,7 @@ int HandleEPD(int argc, char* argv[]) {
     char* p = fen;
     while (*p) ++p;
     while (p-- > f) { if (isspace(*p)) *p = 0; else break; }
-    if (!DoPerft(f, 0, max_leafs)) {
+    if (!DoPerft(f, min_rate, max_rate, 0, max_leafs)) {
       result = 3;
       break;
     }
@@ -1902,6 +1920,8 @@ int HandleEPD(int argc, char* argv[]) {
   fclose(fp);
   fp = NULL;
   std::cout << positions << " positions tested" << std::endl;
+  std::cout << " min KLeafs/sec = " << min_rate << std::endl;
+  std::cout << " max KLeafs/sec = " << max_rate << std::endl;
   return result;
 }
 
