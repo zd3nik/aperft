@@ -1932,11 +1932,13 @@ int main(int argc, char* argv[]) {
   InitNodeStack();
   InitMoveStack();
   int ret = 1;
-  if (!strcmp(argv[1], "fen")) {
-    ret = HandleFEN(argc, argv);
-  }
-  else if (!strcmp(argv[1], "epd")) {
-    ret = HandleEPD(argc, argv);
+  if (argc > 1) {
+    if (!strcmp(argv[1], "fen")) {
+      ret = HandleFEN(argc, argv);
+    }
+    else if (!strcmp(argv[1], "epd")) {
+      ret = HandleEPD(argc, argv);
+    }
   }
   if (ret == 1) {
     std::cout << "usage: " << argv[0]
