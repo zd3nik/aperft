@@ -1168,8 +1168,8 @@ public:
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      if (atkDir[move.From()] &&
-          (atkDir[move.From()] != abs(_dir[move.From()][move.To()])))
+      if (pinDir[move.From()] &&
+          (pinDir[move.From()] != abs(_dir[move.From()][move.To()])))
       {
         return;
       }
@@ -1182,8 +1182,8 @@ public:
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      if (atkDir[move.From()] &&
-          (atkDir[move.From()] != abs(_dir[move.From()][move.To()])))
+      if (pinDir[move.From()] &&
+          (pinDir[move.From()] != abs(_dir[move.From()][move.To()])))
       {
         return;
       }
@@ -1383,7 +1383,7 @@ public:
     int xrayCount = 0;
     int xray[4] = {-1,-1,-1,-1};
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      memset(atkDir, 0, sizeof(atkDir));
+      memset(pinDir, 0, sizeof(pinDir));
     }
     const Move* mv = _knightMoves[_king[color]];
     for (; *mv; ++mv) {
@@ -1398,68 +1398,51 @@ public:
     }
     Move** mvs = _queenMoves[_king[color]];
     for (int i = 0; (i < 8) && mvs[i]; ++i) {
-      int firstPiece = 0;
-      int pinnedSquare = -1;
       int newSquareCount = squareCount;
+      int to = -1;
       for (mv = mvs[i]; *mv; ++mv) {
         assert(mv->Valid());
         assert(mv->Type() == QueenMove);
         assert(mv->From() == _king[color]);
-        if (firstPiece) {
-          assert(COLOR(firstPiece) == color);
-          assert(IS_SQUARE(pinnedSquare));
-          assert(_board[pinnedSquare] == firstPiece);
-          const int pc = _board[mv->To()];
-          if (pc) {
-            if ((COLOR(pc) != color) && (pc >= Bishop) && (pc < King)) {
-              const int dir = _dir[mv->From()][mv->To()];
-              switch (dir) {
-              case SouthWest: case SouthEast: case NorthWest: case NorthEast:
-                if ((pc == ((!color)|Bishop)) || (pc == ((!color)|Queen))) {
-                  atkDir[pinnedSquare] = abs(dir);
-                }
-                break;
-              case South: case West: case East: case North:
-                if ((pc == ((!color)|Rook)) || (pc == ((!color)|Queen))) {
-                  atkDir[pinnedSquare] = abs(dir);
-                }
-                break;
-              default:
-                assert(false);
-              }
-            }
-            break;
-          }
-        }
-        else {
-          assert(squareCount < 40);
-          squares[squareCount++] = mv->To();
-          if ((firstPiece = _board[mv->To()])) {
-            if (COLOR(firstPiece) == color) {
-              if (_diagSliders[!color] + _crossSliders[!color]) {
-                pinnedSquare = mv->To();
-                continue;
-              }
-            }
-            break;
-          }
+        assert(squareCount < 40);
+        squares[newSquareCount++] = (to = mv->To());
+        if (_board[to]) {
+          break;
         }
       }
-      switch (firstPiece) {
+      if ((to < 0) || !_board[to]) {
+        continue;
+      }
+      const int from = mv->From();
+      if (COLOR(_board[to]) == color) {
+        if (_atkd[to]) {
+          const int dir = Direction(to, from);
+          const int af = ((_atkd[to] >> AttackShift(dir)) & 0xFF);
+          if (af) {
+            assert(IS_SQUARE(af - 1));
+            assert(IS_SLIDER(_board[af - 1]));
+            if (COLOR(_board[af - 1]) != color) {
+              pinDir[to] = abs(dir);
+            }
+          }
+        }
+        continue;
+      }
+      switch (_board[to]) {
       case ((!color)|Pawn):
-        if (_dist[mv->From()][mv->To()] == 1) {
+        if (_dist[from][to] == 1) {
           if (color) {
-            switch (_dir[mv->From()][mv->To()]) {
+            switch (_dir[from][to]) {
             case SouthWest: case SouthEast:
-              newSquareCount = squareCount;
+              squareCount = newSquareCount;
               attackers++;
               break;
             }
           }
           else {
-            switch (_dir[mv->From()][mv->To()]) {
+            switch (_dir[from][to]) {
             case NorthWest: case NorthEast:
-              newSquareCount = squareCount;
+              squareCount = newSquareCount;
               attackers++;
               break;
             }
@@ -1467,45 +1450,44 @@ public:
         }
         break;
       case ((!color)|Bishop):
-        switch (_dir[mv->From()][mv->To()]) {
+        switch (_dir[from][to]) {
         case SouthWest: case SouthEast: case NorthWest: case NorthEast:
-          if (_dist[mv->From()][mv->To()] > 1) {
+          if (_dist[from][to] > 1) {
             assert(xrayCount < 4);
-            xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+            xray[xrayCount++] = (from + _dir[from][to]);
           }
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-          newSquareCount = squareCount;
+          xray[xrayCount++] = (from + _dir[to][from]);
+          squareCount = newSquareCount;
           attackers++;
           break;
         }
         break;
       case ((!color)|Rook):
-        switch (_dir[mv->From()][mv->To()]) {
+        switch (_dir[from][to]) {
         case South: case West: case East: case North:
-          if (_dist[mv->From()][mv->To()] > 1) {
+          if (_dist[from][to] > 1) {
             assert(xrayCount < 4);
-            xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+            xray[xrayCount++] = (from + _dir[from][to]);
           }
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-          newSquareCount = squareCount;
+          xray[xrayCount++] = (from + _dir[to][from]);
+          squareCount = newSquareCount;
           attackers++;
           break;
         }
         break;
       case ((!color)|Queen):
-        if (_dist[mv->From()][mv->To()] > 1) {
+        if (_dist[from][to] > 1) {
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+          xray[xrayCount++] = (from + _dir[from][to]);
         }
         assert(xrayCount < 4);
-        xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-        newSquareCount = squareCount;
+        xray[xrayCount++] = (from + _dir[to][from]);
+        squareCount = newSquareCount;
         attackers++;
         break;
       }
-      squareCount = newSquareCount;
     }
     assert(attackers < 3);
     if (!attackers) {
@@ -1759,7 +1741,7 @@ private:
   int ply;
   int state;
   int ep;
-  int atkDir[64];
+  int pinDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];
@@ -2183,11 +2165,13 @@ int main(int argc, char* argv[]) {
   InitNodeStack();
   InitMoveStack();
   int ret = 1;
-  if (!strcmp(argv[1], "fen")) {
-    ret = HandleFEN(argc, argv);
-  }
-  else if (!strcmp(argv[1], "epd")) {
-    ret = HandleEPD(argc, argv);
+  if (argc > 1) {
+    if (!strcmp(argv[1], "fen")) {
+      ret = HandleFEN(argc, argv);
+    }
+    else if (!strcmp(argv[1], "epd")) {
+      ret = HandleEPD(argc, argv);
+    }
   }
   if (ret == 1) {
     std::cout << "usage: " << argv[0]
