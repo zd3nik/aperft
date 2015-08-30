@@ -440,7 +440,6 @@ void ClearAttacksFrom(const int pc, const int from) {
 //-----------------------------------------------------------------------------
 void TruncateAttacks(const int to, const int stop) {
   assert(IS_SQUARE(to));
-  assert(_board[to]);
   for (uint64_t tmp = _atkd[to]; tmp; tmp >>= 8) {
     if (tmp & 0xFF) {
       const int from = static_cast<int>((tmp & 0xFF) - 1);
@@ -1025,13 +1024,12 @@ public:
     switch (move.Type()) {
     case PawnMove:
     case PawnLung:
-      assert(pc == (color|Pawn));
+      assert(move.Promo() ? (pc == move.Promo()) : (pc == (color|Pawn)));
       assert(!cap);
       _board[from] = (color|Pawn);
       _board[to] = 0;
       break;
     case PawnCap:
-      _board[from] = (color|Pawn);
       if (cap) {
         _board[to] = cap;
       }
@@ -1039,14 +1037,15 @@ public:
         assert(pc == (color|Pawn));
         assert(ep && (to == ep));
         assert(!_board[ep + (color ? North : South)]);
+        if (_atkd[ep + (color ? North : South)]) {
+          TruncateAttacks(ep + (color ? North : South), -1);
+        }
         _board[to] = 0;
         _board[ep + (color ? North : South)] = ((!color)|Pawn);
         _pieceCount[!color]++;
         assert(_pieceCount[!color] <= 16);
-        if (_atkd[ep + (color ? North : South)]) {
-          TruncateAttacks(ep + (color ? North : South), from);
-        }
       }
+      _board[from] = (color|Pawn);
       break;
     case KnightMove:
     case BishopMove:
@@ -1133,6 +1132,12 @@ public:
     }
     else if (_atkd[to]) {
       ExtendAttacks(to);
+
+    }
+    if (!cap && (move.Type() == PawnCap) &&
+        _atkd[ep + (color ? North : South)])
+    {
+      TruncateAttacks(ep + (color ? North : South), from);
     }
     if (IS_SLIDER(_board[from])) {
       AddAttacksFrom(_board[from], from);
