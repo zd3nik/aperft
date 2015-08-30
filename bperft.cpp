@@ -57,14 +57,14 @@ enum Limits {
 
 //-----------------------------------------------------------------------------
 enum Square {
-  A1,B1,C1,D1,E1,F1,G1,H1,
-  A2,B2,C2,D2,E2,F2,G2,H2,
-  A3,B3,C3,D3,E3,F3,G3,H3,
-  A4,B4,C4,D4,E4,F4,G4,H4,
-  A5,B5,C5,D5,E5,F5,G5,H5,
-  A6,B6,C6,D6,E6,F6,G6,H6,
-  A7,B7,C7,D7,E7,F7,G7,H7,
-  A8,B8,C8,D8,E8,F8,G8,H8
+  A1,B1,C1,D1,E1,F1,G1,H1, // 00,01,02,03,04,05,06,07
+  A2,B2,C2,D2,E2,F2,G2,H2, // 08,09,10,11,12,13,14,15
+  A3,B3,C3,D3,E3,F3,G3,H3, // 16,17,18,19,20,21,22,23
+  A4,B4,C4,D4,E4,F4,G4,H4, // 24,25,26,27,28,29,30,31
+  A5,B5,C5,D5,E5,F5,G5,H5, // 32,33,34,35,36,37,38,39
+  A6,B6,C6,D6,E6,F6,G6,H6, // 40,41,42,43,44,45,46,47
+  A7,B7,C7,D7,E7,F7,G7,H7, // 48,49,50,51,52,53,54,55
+  A8,B8,C8,D8,E8,F8,G8,H8  // 56,57,58,59,60,61,62,63
 };
 
 //-----------------------------------------------------------------------------
@@ -376,24 +376,23 @@ int AttackShift(const int dir) {
 }
 
 //-----------------------------------------------------------------------------
-bool AddAttack(const int from, const int to) {
+void AddAttack(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   assert(from != to);
   assert(IS_SLIDER(_board[from]));
-  const int shift = AttackShift(Direction(to, from));
-  _atkd[to] = ((_atkd[to] & ~(0xFF << shift)) | ((from + 1) << shift));
-  return (_board[to] != 0);
+  const int shift = AttackShift(Direction(from, to));
+  _atkd[to] = ((_atkd[to] & ~(0xFFULL << shift)) |
+               ((uint64_t(from) + 1) << shift));
 }
 
 //-----------------------------------------------------------------------------
-bool ClearAttack(const int from, const int to) {
+void ClearAttack(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   assert(from != to);
   assert(IS_SLIDER(_board[from]));
-  _atkd[to] &= ~(0xFF << AttackShift(Direction(to, from)));
-  return (_board[to] != 0);
+  _atkd[to] &= ~(0xFFULL << AttackShift(Direction(from, to)));
 }
 
 //-----------------------------------------------------------------------------
@@ -408,7 +407,9 @@ void AddAttacksFrom(const int pc, const int from) {
   for (int i = 0; (i < count) && mvs[i]; ++i) {
     for (const Move* mv = mvs[i]; *mv; ++mv) {
       assert(mv->From() == from);
-      if (AddAttack(from, mv->To())) {
+      const int to = mv->To();
+      AddAttack(from, to);
+      if (_board[to]) {
         break;
       }
     }
@@ -427,7 +428,9 @@ void ClearAttacksFrom(const int pc, const int from) {
   for (int i = 0; (i < count) && mvs[i]; ++i) {
     for (const Move* mv = mvs[i]; *mv; ++mv) {
       assert(mv->From() == from);
-      if (ClearAttack(from, mv->To())) {
+      const int to = mv->To();
+      ClearAttack(from, to);
+      if (_board[to]) {
         break;
       }
     }
@@ -435,7 +438,7 @@ void ClearAttacksFrom(const int pc, const int from) {
 }
 
 //-----------------------------------------------------------------------------
-void TruncateAttacks(const int to) {
+void TruncateAttacks(const int to, const int stop) {
   assert(IS_SQUARE(to));
   assert(_board[to]);
   for (uint64_t tmp = _atkd[to]; tmp; tmp >>= 8) {
@@ -445,7 +448,11 @@ void TruncateAttacks(const int to) {
       assert(IS_SLIDER(_board[from]));
       const int dir = Direction(from, to);
       for (int ato = (to + dir); IS_SQUARE(ato); ato += dir) {
-        if ((Direction(from, ato) != dir) || ClearAttack(from, ato)) {
+        if (Direction(from, ato) != dir) {
+          break;
+        }
+        ClearAttack(from, ato);
+        if ((ato == stop) || _board[ato]) {
           break;
         }
       }
@@ -465,7 +472,11 @@ void ExtendAttacks(const int to) {
       const int dir = Direction(from, to);
       assert(IS_DIR(dir));
       for (int ato = (to + dir); IS_SQUARE(ato); ato += dir) {
-        if ((Direction(from, ato) != dir) || AddAttack(from, ato)) {
+        if (Direction(from, ato) != dir) {
+          break;
+        }
+        AddAttack(from, ato);
+        if (_board[ato]) {
           break;
         }
       }
@@ -586,6 +597,50 @@ public:
       }
     }
     return false;
+  }
+  bool VerifyAttacksTo(const int to, const bool do_assert) const {
+    uint64_t atk = 0;
+    Move** mvs = _queenMoves[to];
+    for (int i = 0; (i < 8) && mvs[i]; ++i) {
+      for (Move* mv = mvs[i]; *mv; ++mv) {
+        assert(to == mv->From());
+        const int from = mv->To();
+        const int pc = _board[from];
+        if (IS_SLIDER(pc)) {
+          const int dir = Direction(from, to);
+          const int shift = AttackShift(dir);
+          switch (dir) {
+          case South: case West: case East: case North:
+            if ((Black|pc) != (Black|Bishop)) {
+              atk = ((atk & ~(0xFFULL << shift)) | ((uint64_t(from) + 1) << shift));
+            }
+            break;
+          case SouthWest: case SouthEast: case  NorthWest: case NorthEast:
+            if ((Black|pc) != (Black|Rook)) {
+              atk = ((atk & ~(0xFFULL << shift)) | ((uint64_t(from) + 1) << shift));
+            }
+            break;
+          default:
+            assert(false);
+          }
+        }
+        if (pc) {
+          break;
+        }
+      }
+    }
+    if (do_assert) {
+      assert(atk == _atkd[to]);
+    }
+    return (atk == _atkd[to]);
+  }
+  bool VerifyAttacks(const bool do_assert) const {
+    for (int sqr = A1; sqr <= H8; ++sqr) {
+      if (!VerifyAttacksTo(sqr, do_assert)) {
+        return false;
+      }
+    }
+    return true;
   }
   bool LoadFEN(const char* fen) {
     memset(_board, 0, sizeof(_board));
@@ -746,6 +801,7 @@ public:
         AddAttacksFrom(_board[sqr], sqr);
       }
     }
+    assert(VerifyAttacks(true));
     return true;
   }
   template<Color color>
@@ -817,6 +873,9 @@ public:
           _board[ep + (color ? North : South)] = 0;
           _pieceCount[!color]--;
           assert(_pieceCount[!color] > 0);
+          if (_atkd[ep + (color ? North : South)]) {
+            ExtendAttacks(ep + (color ? North : South));
+          }
         }
       }
       dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
@@ -857,11 +916,13 @@ public:
       assert(!AttackedBy<!color>(color ? E8 : E1));
       assert(!AttackedBy<!color>(color ? F8 : F1));
       assert(!AttackedBy<!color>(color ? G8 : G1));
+      ClearAttacksFrom((color|Rook), (color ? H8 : H1));
       _board[color ? E8 : E1] = 0;
       _board[color ? F8 : F1] = (color|Rook);
       _board[color ? G8 : G1] = (color|King);
       _board[color ? H8 : H1] = 0;
       _king[color] = (color ? G8 : G1);
+      AddAttacksFrom((color|Rook), (color ? F8 : F1));
       dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
       dest.ep = 0;
       break;
@@ -879,11 +940,13 @@ public:
       assert(!AttackedBy<!color>(color ? C8 : C1));
       assert(!AttackedBy<!color>(color ? D8 : D1));
       assert(!AttackedBy<!color>(color ? E8 : E1));
+      ClearAttacksFrom((color|Rook), (color ? A8 : A1));
       _board[color ? A8 : A1] = 0;
       _board[color ? C8 : C1] = (color|King);
       _board[color ? D8 : D1] = (color|Rook);
       _board[color ? E8 : E1] = 0;
       _king[color] = (color ? C8 : C1);
+      AddAttacksFrom((color|Rook), (color ? D8 : D1));
       dest.state = ((state ^ 1) & ~(color ? BlackCastle : WhiteCastle));
       dest.ep = 0;
       break;
@@ -926,8 +989,8 @@ public:
       assert(_crossSliders[color] < 12);
       break;
     }
-    if (_atkd[to]) {
-      TruncateAttacks(to);
+    if (!cap && _atkd[to]) {
+      TruncateAttacks(to, from);
     }
     if (_atkd[from]) {
       ExtendAttacks(from);
@@ -935,6 +998,11 @@ public:
     if (IS_SLIDER(_board[to])) {
       AddAttacksFrom(_board[to], to);
     }
+//    if (!VerifyAttacks(false)) {
+//      std::cout << "EXEC " << move.ToString() << std::endl;
+//      Print();
+//    }
+    assert(VerifyAttacks(true));
   }
   template<Color color>
   void Undo(const Move& move) const {
@@ -975,6 +1043,9 @@ public:
         _board[ep + (color ? North : South)] = ((!color)|Pawn);
         _pieceCount[!color]++;
         assert(_pieceCount[!color] <= 16);
+        if (_atkd[ep + (color ? North : South)]) {
+          TruncateAttacks(ep + (color ? North : South), from);
+        }
       }
       break;
     case KnightMove:
@@ -1003,11 +1074,13 @@ public:
       assert(!_board[color ? H8 : H1]);
       assert(_board[color ? F8 : F1] == (color|Rook));
       assert(_board[color ? G8 : G1] == (color|King));
+      ClearAttacksFrom((color|Rook), (color ? F8 : F1));
       _board[color ? E8 : E1] = (color|King);
       _board[color ? F8 : F1] = 0;
       _board[color ? G8 : G1] = 0;
       _board[color ? H8 : H1] = (color|Rook);
       _king[color] = from;
+      AddAttacksFrom((color|Rook), (color ? H8 : H1));
       break;
     case CastleLong:
       assert(from == (color ? E8 : E1));
@@ -1021,17 +1094,19 @@ public:
       assert(!_board[color ? B8 : B1]);
       assert(_board[color ? C8 : C1] == (color|King));
       assert(_board[color ? D8 : D1] == (color|Rook));
+      ClearAttacksFrom((color|Rook), (color ? D8 : D1));
       _board[color ? A8 : A1] = (color|Rook);
       _board[color ? C8 : C1] = 0;
       _board[color ? D8 : D1] = 0;
       _board[color ? E8 : E1] = (color|King);
       _king[color] = from;
+      AddAttacksFrom((color|Rook), (color ? A8 : A1));
       break;
     default:
       assert(false);
     }
     if (_atkd[from]) {
-      TruncateAttacks(from);
+      TruncateAttacks(from, to);
     }
     if (cap) {
       _pieceCount[!color]++;
@@ -1078,6 +1153,11 @@ public:
       assert(_crossSliders[color] >= 0);
       break;
     }
+//    if (!VerifyAttacks(false)) {
+//      std::cout << "UNDO " << move.ToString() << std::endl;
+//      Print();
+//    }
+    assert(VerifyAttacks(true));
   }
   void AddMove(const Color color, const Move& move) {
     assert(moveCount >= 0);
@@ -1646,6 +1726,7 @@ public:
     assert(!ply);
     assert(!parent);
     assert(child);
+    assert(VerifyAttacks(true));
     GenerateMoves<color>();
     std::sort(moves, (moves + moveCount));
     uint64_t total = 0;
