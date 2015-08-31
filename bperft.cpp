@@ -1399,18 +1399,19 @@ public:
     Move** mvs = _queenMoves[_king[color]];
     for (int i = 0; (i < 8) && mvs[i]; ++i) {
       int newSquareCount = squareCount;
-      int to = -1;
+      int to;
       for (mv = mvs[i]; *mv; ++mv) {
         assert(mv->Valid());
         assert(mv->Type() == QueenMove);
         assert(mv->From() == _king[color]);
-        assert(squareCount < 40);
+        assert(newSquareCount < 40);
         squares[newSquareCount++] = (to = mv->To());
         if (_board[to]) {
           break;
         }
       }
-      if ((to < 0) || !_board[to]) {
+      assert(newSquareCount > squareCount);
+      if (!_board[to]) {
         continue;
       }
       const int from = mv->From();

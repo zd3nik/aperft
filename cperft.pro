@@ -9,7 +9,7 @@ CONFIG(release, debug|release) {
 }
 
 SOURCES += \
-    bperft.cpp
+    cperft.cpp
 
 DISTFILES += \
     README.md \

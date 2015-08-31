@@ -12,4 +12,5 @@ SOURCES += \
     aperft.cpp
 
 DISTFILES += \
-    README.md
+    README.md \
+    perftsuite.epd
