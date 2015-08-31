@@ -40,7 +40,7 @@ This is `aperft` with directional slider attack tables.
 
 Each square that is attacked by a slider knows which square the attacking slider(s) are on.  The attacker squares are stored according to the direction of their attack, this makes clearing/updating the from square in any direction very trivial.
 
-It's slightly slower than `aperft` but the attack maps would be very useful in a real chess engine.  It's also possible that tweaking the move generation routines to better take advantage of the attack maps could bring bpeft performance up to par with `aperft`, maybe even surpass it.
+It's slightly slower than `aperft` but the attack maps would be very useful in a real chess engine.  It's also possible that tweaking the move generation routines to better take advantage of the attack maps could bring `bperft` performance up to par with `aperft`, maybe even surpass it.
 
 Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
