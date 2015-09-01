@@ -3,9 +3,7 @@ Chess perft analyzer that uses pre-compiled arrays of pseudo legal moves per pie
 
 I am planning on writing several perft analyzers using various board representations and move generators.  This is the first in that series.
 
-Similar to this, one of my earliest chess engines used a table of pre-compiled moves per piece type.  That move generator maintained a list of legal moves that was updated whenever a move was made.  The idea was that only removing invalidated moves and adding newly legal moves would require less work than regenerating the complete move list every time.  That theory turned out to be resoundingly false - with my implementation anyway.  I would like to try that approach again some day, using a vastly different implementation.
-
-Anyway, I was curious just how fast a perft analyzer that uses a pre-compiled move table could be.  Before adding legality checking this approach would run at about 100-150 MLeafs per second on my i5 laptop.  Adding legality checking (and a check evasion generator) dropped that rate down to between 15 and 80 MLeafs per second.  So the pre-compiled list of pseudo legal moves is a decent way of generating moves, but a smarter approach is needed for legality checking.
+Before adding legality checking this approach would run at about 100-150 MLeafs per second on my i5 laptop.  Adding legality checking (and a check evasion generator) dropped that rate down to between 15 and 80 MLeafs per second.  So the pre-compiled list of pseudo legal moves is a decent way of generating moves, but a smarter approach is needed for legality checking.
 
 Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
@@ -103,6 +101,38 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
     user  4m43.244s
     sys 0m0.056s
 
-# dperft?
-I will make a version of `cperft` that uses attack tables the same as `bperft`
+# dperft
+This is `cperft` with directional slider attack tables.
+
+Each square that is attacked by a slider knows which square the attacking slider(s) are on.  The attacker squares are stored according to the direction of their attack, this makes clearing/updating the from square in any direction very trivial.
+
+It's slightly slower than `cperft` but the attack maps would be very useful in a real chess engine.  It's also possible that tweaking the move generation routines to better take advantage of the attack maps could bring `dperft` performance up to par with `cperft`, maybe even surpass it.
+
+Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
+
+    $ ./test.sh dperft
+
+    88136 dperft.O1
+     min KLeafs/sec = 24779.1
+     max KLeafs/sec = 62000.9
+
+    real  5m45.568s
+    user  5m45.956s
+    sys 0m0.108s
+
+    87560 dperft.O2
+     min KLeafs/sec = 22223.8
+     max KLeafs/sec = 66060.9
+
+    real  5m14.949s
+    user  5m15.312s
+    sys 0m0.040s
+
+    96816 dperft.O3
+     min KLeafs/sec = 29344.5
+     max KLeafs/sec = 68249
+
+    real  4m42.749s
+    user  4m43.044s
+    sys 0m0.068s
 

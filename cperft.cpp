@@ -1957,8 +1957,10 @@ int HandleEPD(int argc, char* argv[]) {
   fclose(fp);
   fp = NULL;
   std::cout << positions << " positions tested" << std::endl;
-  std::cout << " min KLeafs/sec = " << min_rate << std::endl;
-  std::cout << " max KLeafs/sec = " << max_rate << std::endl;
+  if (result == 0) {
+    std::cout << " min KLeafs/sec = " << min_rate << std::endl;
+    std::cout << " max KLeafs/sec = " << max_rate << std::endl;
+  }
   return result;
 }
 
