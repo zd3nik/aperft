@@ -705,7 +705,7 @@ public:
             return true;
           }
         }
-        if (pc || !_crossSliders[color]) {
+        if (pc || (from == end) || !_crossSliders[color]) {
           break;
         }
       }
@@ -1300,7 +1300,7 @@ public:
             assert(_board[color ? H8 : H1] == (color|Rook));
             AddMove(color, CastleShort, from, (color ? G8 : G1));
           }
-          else if ((to == (color ? C8 : C1)) &&
+          else if ((to == (color ? D8 : D1)) &&
                    (state & (color ? BlackLong : WhiteLong)) &&
                    !_board[color ? C8 : C1] &&
                    !_board[color ? B8 : B1] &&
@@ -1442,6 +1442,7 @@ public:
               case ((!color)|Queen):
                 pinDir[end] = abs(dir);
               }
+              break;
             }
           }
           continue;
@@ -1506,7 +1507,7 @@ public:
       }
     }
     else { // no enemy sliders on the board
-      for (mvs = _pawnCaps[from][!color]; mvs; mvs >>= 8) {
+      for (mvs = _pawnCaps[from][color]; mvs; mvs >>= 8) {
         assert(mvs & 0xFF);
         to = ((mvs & 0xFF) - 1);
         assert(IS_SQUARE(to));

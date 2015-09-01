@@ -70,11 +70,39 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
     user  5m26.724s
     sys 0m0.084s
 
-# cperft?
-A table similar to the _atkd table in `bperft` coule be used for move generation.  When I have time I will make a version of `bperft` that uses this idea instead of the pre-calculated move arrays of `aperft`.  It would use far less memory and would simplify/optimize the move array loops considerably.
+# cperft
+This is `aperft` with pre-calculated move tables replaced with pre-calculated farthest square per direction tables.  Pawn pushes and castling moves are not pre-calculated.
 
-NOTE: the movegen arrays do not need to be structured accoring to move direction.  They only need to be a compact list of farthest 'to' squares.  And they could be used for king and knight moves as well as sliders.  I haven't decided yet whether it makes sense to use this approach for pawn moves (probably for pawn attacks, but not necessarily for pushes).
+I also attempted to optimize the AttackedBy and GetCheckEvasions routines a bit.  I will apply the same optimizations to those same routines in `aperft`.
 
-# dperft??
-It may be worth trying out a `dperft` version of `cperft` that continuously updates the farthest 'to' square in each direction of the movegen maps.  That info would not be useful for a perft analyser but it would be very useful for positional evaluation in a real chess engine.
+Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
+
+    $ ./test.sh cperft
+
+    79576 cperft.O1
+     min KLeafs/sec = 24934.3
+     max KLeafs/sec = 70203.2
+
+    real  4m55.266s
+    user  4m55.532s
+    sys 0m0.084s
+
+    87192 cperft.O2
+     min KLeafs/sec = 21511.7
+     max KLeafs/sec = 76376.5
+
+    real  4m45.614s
+    user  4m45.896s
+    sys 0m0.032s
+
+    92360 cperft.O3
+     min KLeafs/sec = 22073.4
+     max KLeafs/sec = 79577.1
+
+    real  4m42.969s
+    user  4m43.244s
+    sys 0m0.056s
+
+# dperft?
+I will make a version of `cperft` that uses attack tables the same as `bperft`
 
