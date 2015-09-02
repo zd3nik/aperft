@@ -148,13 +148,13 @@ const int _TOUCH[64] = {
 };
 
 //-----------------------------------------------------------------------------
-int _dist[64][64] = {0};
-int _dir[64][64] = {0};
-int _board[64] = {0};
-int _king[2] = {0};
-int _pieceCount[2] = {0};
-int _diagSliders[2] = {0};
-int _crossSliders[2] = {0};
+char _dist[64][64] = {0};
+char _dir[64][64] = {0};
+char _board[64] = {0};
+char _king[2] = {0};
+char _pieceCount[2] = {0};
+char _diagSliders[2] = {0};
+char _crossSliders[2] = {0};
 
 //--------------------------------------------------------------------------
 void InitDistDir() {
@@ -459,7 +459,7 @@ void InitMoveMaps() {
 
 //-----------------------------------------------------------------------------
 uint64_t _atkd[64];
-const int _atkShift[19] = {
+const char _atkShift[19] = {
    0, // (-9) SouthWest
    8, // (-8) South
   16, // (-7) SouthEast
@@ -1998,7 +1998,7 @@ private:
   int ply;
   int state;
   int ep;
-  int pinDir[64];
+  char pinDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];

@@ -383,8 +383,9 @@ void AddAttack(const int from, const int to) {
   assert(from != to);
   assert(IS_SLIDER(_board[from]));
   const int shift = AttackShift(Direction(from, to));
-  _atkd[to] = ((_atkd[to] & ~(0xFFULL << shift)) |
-               ((uint64_t(from) + 1) << shift));
+  assert(!(_atkd[to] & (0xFFULL << shift)) ||
+         ((_atkd[to] & (0xFFULL << shift)) == (uint64_t(from + 1) << shift)));
+  _atkd[to] |= (uint64_t(from + 1) << shift);
 }
 
 //-----------------------------------------------------------------------------
@@ -621,7 +622,7 @@ public:
               ((IS_DIAG(dir) && ((Black|pc) != (Black|Rook))) ||
                (IS_CROSS(dir) && ((Black|pc) != (Black|Bishop)))))
           {
-            atk |= ((uint64_t(from) + 1) << AttackShift(dir));
+            atk |= (uint64_t(from + 1) << AttackShift(dir));
           }
           break;
         }
@@ -1000,7 +1001,7 @@ public:
 //      std::cout << "EXEC " << move.ToString() << std::endl;
 //      Print();
 //    }
-    assert(VerifyAttacks(true));
+//    assert(VerifyAttacks(true));
   }
   template<Color color>
   void Undo(const Move& move) const {
@@ -1161,7 +1162,7 @@ public:
 //      std::cout << "UNDO " << move.ToString() << std::endl;
 //      Print();
 //    }
-    assert(VerifyAttacks(true));
+//    assert(VerifyAttacks(true));
   }
   void AddMove(const Color color, const Move& move) {
     assert(moveCount >= 0);

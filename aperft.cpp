@@ -259,15 +259,14 @@ public:
     desc = other.desc;
     return *this;
   }
-  Move& Clear() { desc = NoMove; return *this; }
   Move& Set(const int type, const int from, const int to,
             const int cap = 0, const int promo = 0)
   {
-    desc = (type                  |
-            (from  <<  FromShift) |
-            (to    <<    ToShift) |
-            (cap   <<   CapShift) |
-            (promo << PromoShift));
+    desc = (type                 |
+           (from  <<  FromShift) |
+           (to    <<    ToShift) |
+           (cap   <<   CapShift) |
+           (promo << PromoShift));
     assert(Type() == type);
     assert(From() == from);
     assert(To() == to);
@@ -276,17 +275,7 @@ public:
     Validate();
     return *this;
   }
-  Move& SetCapPromo(const int cap, const int promo) {
-    assert(!cap || IS_CAP(cap));
-    assert(!promo || IS_PROMO(promo));
-    desc = ((desc & TwentyBits)   | // type, from, to
-            (cap   <<   CapShift) |
-            (promo << PromoShift));
-    assert(Cap() == cap);
-    assert(Promo() == promo);
-    Validate();
-    return *this;
-  }
+  void Clear() { desc = NoMove; }
   bool operator!() const { return !desc; }
   bool operator==(const Move& other) const { return (desc == other.desc); }
   bool operator!=(const Move& other) const { return (desc != other.desc); }
@@ -420,16 +409,7 @@ public:
   template<Color color>
   bool AttackedBy(const int sqr) const {
     assert(IS_SQUARE(sqr));
-    Move** mvs;
     const Move* mv;
-    for (mv = _pawnMoves[sqr][!color]; *mv; ++mv) {
-      assert(mv->Valid());
-      assert(mv->From() == sqr);
-      assert((mv->Type() > 0) && (mv->Type() <= PawnCap));
-      if ((mv->Type() == PawnCap) && (_board[mv->To()] == (color|Pawn))) {
-        return true;
-      }
-    }
     for (mv = _knightMoves[sqr]; *mv; ++mv) {
       assert(mv->Valid());
       assert(mv->From() == sqr);
@@ -438,29 +418,45 @@ public:
         return true;
       }
     }
-    bool kingOnly = !_diagSliders[color];
-    mvs = _bishopMoves[sqr];
+    bool noSliders = !_diagSliders[color];
+    Move** mvs = _bishopMoves[sqr];
     for (int cap = 0, i = 0; (i < 4) && mvs[i]; ++i) {
       for (mv = mvs[i]; *mv; ++mv) {
         assert(mv->Valid());
         assert(mv->From() == sqr);
         assert(mv->Type() == BishopMove);
         switch ((cap = _board[mv->To()])) {
+        case (color|Pawn):
+          if (Distance(sqr, mv->To()) == 1) {
+            if (color) {
+              switch (Direction(sqr, mv->To())) {
+              case NorthWest: case NorthEast:
+                return true;
+              }
+            }
+            else {
+              switch (Direction(sqr, mv->To())) {
+              case SouthWest: case SouthEast:
+                return true;
+              }
+            }
+          }
+          break;
         case (color|Bishop):
         case (color|Queen):
           return true;
         case (color|King):
-          if (_dist[sqr][mv->To()] == 1){
+          if (Distance(sqr, mv->To()) == 1) {
             return true;
           }
           break;
         }
-        if (cap || kingOnly) {
+        if (cap || noSliders) {
           break;
         }
       }
     }
-    kingOnly = !_crossSliders[color];
+    noSliders = !_crossSliders[color];
     mvs = _rookMoves[sqr];
     for (int cap = 0, i = 0; (i < 4) && mvs[i]; ++i) {
       for (mv = mvs[i]; *mv; ++mv) {
@@ -470,12 +466,12 @@ public:
         case (color|Queen):
           return true;
         case (color|King):
-          if (_dist[sqr][mv->To()] == 1){
+          if (Distance(sqr, mv->To()) == 1) {
             return true;
           }
           break;
         }
-        if (cap || kingOnly) {
+        if (cap || noSliders) {
           break;
         }
       }
@@ -646,88 +642,91 @@ public:
     assert(!move.Promo() || IS_PROMO(move.Promo()));
     assert(!move.Promo() || COLOR(move.Promo()) == color);
     assert(_board[move.To()] == move.Cap());
+    const int from = move.From();
+    const int to   = move.To();
+    const int cap  = move.Cap();
     switch (move.Type()) {
     case PawnMove:
-      assert(_board[move.From()] == (color|Pawn));
-      assert(!_board[move.To()]);
-      assert(!move.Cap());
-      _board[move.From()] = 0;
+      assert(_board[from] == (color|Pawn));
+      assert(!_board[to]);
+      assert(!cap);
+      _board[from] = 0;
       if (move.Promo()) {
         assert(IS_PROMO(move.Promo()));
         assert(COLOR(move.Promo()) == color);
-        assert(YC(move.To()) == (color ? 0 : 7));
-        _board[move.To()] = move.Promo();
+        assert(YC(to) == (color ? 0 : 7));
+        _board[to] = move.Promo();
       }
       else {
-        assert(YC(move.To()) != (color ? 0 : 7));
-        _board[move.To()] = (color|Pawn);
+        assert(YC(to) != (color ? 0 : 7));
+        _board[to] = (color|Pawn);
       }
-      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case PawnLung:
-      assert(_board[move.From()] == (color|Pawn));
-      assert(YC(move.From()) == (color ? 6 : 1));
-      assert(!_board[move.To()]);
-      assert(!_board[move.To() + (color ? North : South)]);
-      assert(!move.Cap());
+      assert(_board[from] == (color|Pawn));
+      assert(YC(from) == (color ? 6 : 1));
+      assert(!_board[to]);
+      assert(!_board[to + (color ? North : South)]);
+      assert(!cap);
       assert(!move.Promo());
-      _board[move.From()] = 0;
-      _board[move.To()] = (color|Pawn);
-      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
-      dest.ep = (move.To() + (color ? North : South));
+      _board[from] = 0;
+      _board[to] = (color|Pawn);
+      dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
+      dest.ep = (to + (color ? North : South));
       break;
     case PawnCap:
-      assert(_board[move.From()] == (color|Pawn));
-      _board[move.From()] = 0;
+      assert(_board[from] == (color|Pawn));
+      _board[from] = 0;
       if (move.Promo()) {
         assert(IS_PROMO(move.Promo()));
         assert(COLOR(move.Promo()) == color);
-        assert(YC(move.To()) == (color ? 0 : 7));
-        assert(move.Cap());
-        _board[move.To()] = move.Promo();
+        assert(YC(to) == (color ? 0 : 7));
+        assert(cap);
+        _board[to] = move.Promo();
       }
       else {
-        assert(YC(move.To()) != (color ? 0 : 7));
-        _board[move.To()] = (color|Pawn);
-        if (!move.Cap()) {
-          assert(ep && (move.To() == ep));
+        assert(YC(to) != (color ? 0 : 7));
+        _board[to] = (color|Pawn);
+        if (!cap) {
+          assert(ep && (to == ep));
           assert(_board[ep + (color ? North : South)] == ((!color)|Pawn));
           _board[ep + (color ? North : South)] = 0;
           _pieceCount[!color]--;
           assert(_pieceCount[!color] > 0);
         }
       }
-      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case KnightMove:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[move.From()] == (color|move.Type()));
-      assert(_board[move.To()] == move.Cap());
+      assert(_board[from] == (color|move.Type()));
+      assert(_board[to] == cap);
       assert(!move.Promo());
-      _board[move.From()] = 0;
-      _board[move.To()] = (color|move.Type());
-      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      _board[from] = 0;
+      _board[to] = (color|move.Type());
+      dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case KingMove:
-      assert(_board[move.From()] == (color|King));
-      assert(_king[color] == move.From());
+      assert(_board[from] == (color|King));
+      assert(_king[color] == from);
       assert(!move.Promo());
-      _board[move.From()] = 0;
-      _board[move.To()] = (color|King);
-      _king[color] = move.To();
-      dest.state = ((state ^ 1) & _TOUCH[move.From()] & _TOUCH[move.To()]);
+      _board[from] = 0;
+      _board[to] = (color|King);
+      _king[color] = to;
+      dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case CastleShort:
-      assert(move.From() == (color ? E8 : E1));
-      assert(move.To() == (color ? G8 : G1));
-      assert(_king[color] == move.From());
-      assert(!move.Cap());
+      assert(from == (color ? E8 : E1));
+      assert(to == (color ? G8 : G1));
+      assert(_king[color] == from);
+      assert(!cap);
       assert(!move.Promo());
       assert(_board[color ? E8 : E1] == (color|King));
       assert(_board[color ? H8 : H1] == (color|Rook));
@@ -745,10 +744,10 @@ public:
       dest.ep = 0;
       break;
     case CastleLong:
-      assert(move.From() == (color ? E8 : E1));
-      assert(move.To() == (color ? C8 : C1));
-      assert(_king[color] == move.From());
-      assert(!move.Cap());
+      assert(from == (color ? E8 : E1));
+      assert(to == (color ? C8 : C1));
+      assert(_king[color] == from);
+      assert(!cap);
       assert(!move.Promo());
       assert(_board[color ? E8 : E1] == (color|King));
       assert(_board[color ? A8 : A1] == (color|Rook));
@@ -769,10 +768,10 @@ public:
     default:
       assert(false);
     }
-    if (move.Cap()) {
+    if (cap) {
       _pieceCount[!color]--;
       assert(_pieceCount[!color] > 0);
-      switch (move.Cap()) {
+      switch (cap) {
       case ((!color)|Bishop):
         _diagSliders[!color]--;
         assert(_diagSliders[!color] >= 0);
@@ -815,22 +814,27 @@ public:
     assert(!move.Promo() || IS_PROMO(move.Promo()));
     assert(!move.Promo() || COLOR(move.Promo()) == color);
     assert(!_board[move.From()]);
+    const int from = move.From();
+    const int to   = move.To();
+    const int cap  = move.Cap();
     switch (move.Type()) {
     case PawnMove:
     case PawnLung:
-      assert(!move.Cap());
-      _board[move.From()] = (color|Pawn);
-      _board[move.To()] = 0;
+      assert(move.Promo() ? (_board[to] == move.Promo())
+                          : (_board[to] == (color|Pawn)));
+      assert(!cap);
+      _board[from] = (color|Pawn);
+      _board[to] = 0;
       break;
     case PawnCap:
-      _board[move.From()] = (color|Pawn);
-      if (move.Cap()) {
-        _board[move.To()] = move.Cap();
+      _board[from] = (color|Pawn);
+      if (cap) {
+        _board[to] = cap;
       }
       else {
-        assert(ep && (move.To() == ep));
+        assert(ep && (to == ep));
         assert(!_board[ep + (color ? North : South)]);
-        _board[move.To()] = 0;
+        _board[to] = 0;
         _board[ep + (color ? North : South)] = ((!color)|Pawn);
         _pieceCount[!color]++;
         assert(_pieceCount[!color] <= 16);
@@ -840,22 +844,22 @@ public:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[move.To()] == (color|move.Type()));
-      _board[move.From()] = (color|move.Type());
-      _board[move.To()] = move.Cap();
+      assert(_board[to] == (color|move.Type()));
+      _board[from] = (color|move.Type());
+      _board[to] = cap;
       break;
     case KingMove:
-      assert(_board[move.To()] == (color|King));
-      assert(_king[color] == move.To());
-      _board[move.From()] = (color|King);
-      _board[move.To()] = move.Cap();
-      _king[color] = move.From();
+      assert(_board[to] == (color|King));
+      assert(_king[color] == to);
+      _board[from] = (color|King);
+      _board[to] = cap;
+      _king[color] = from;
       break;
     case CastleShort:
-      assert(move.From() == (color ? E8 : E1));
-      assert(move.To() == (color ? G8 : G1));
-      assert(_king[color] == move.To());
-      assert(!move.Cap());
+      assert(from == (color ? E8 : E1));
+      assert(to == (color ? G8 : G1));
+      assert(_king[color] == to);
+      assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
       assert(!_board[color ? H8 : H1]);
@@ -865,13 +869,13 @@ public:
       _board[color ? F8 : F1] = 0;
       _board[color ? G8 : G1] = 0;
       _board[color ? H8 : H1] = (color|Rook);
-      _king[color] = move.From();
+      _king[color] = from;
       break;
     case CastleLong:
-      assert(move.From() == (color ? E8 : E1));
-      assert(move.To() == (color ? C8 : C1));
-      assert(_king[color] == move.To());
-      assert(!move.Cap());
+      assert(from == (color ? E8 : E1));
+      assert(to == (color ? C8 : C1));
+      assert(_king[color] == to);
+      assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
       assert(!_board[color ? A8 : A1]);
@@ -882,15 +886,15 @@ public:
       _board[color ? C8 : C1] = 0;
       _board[color ? D8 : D1] = 0;
       _board[color ? E8 : E1] = (color|King);
-      _king[color] = move.From();
+      _king[color] = from;
       break;
     default:
       assert(false);
     }
-    if (move.Cap()) {
+    if (cap) {
       _pieceCount[!color]++;
       assert(_pieceCount[!color] <= 16);
-      switch (move.Cap()) {
+      switch (cap) {
       case ((!color)|Bishop):
         _diagSliders[!color]++;
         assert(_diagSliders[!color] < 12);
@@ -928,31 +932,35 @@ public:
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      if (atkDir[move.From()] &&
-          (atkDir[move.From()] != abs(_dir[move.From()][move.To()])))
+      if (pinDir[move.From()] &&
+          (pinDir[move.From()] != abs(Direction(move.From(), move.To()))))
       {
         return;
       }
     }
     moves[moveCount++] = move;
   }
-  void AddMove(const Color color, const Move& move,
-               const int cap, const int promo)
+  void AddMove(const Color color, const int type,
+               const int from, const int to,
+               const int cap = 0, const int promo = 0)
   {
+    assert(IS_MTYPE(type));
+    assert(IS_SQUARE(from));
+    assert(IS_SQUARE(to));
+    assert(from != to);
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      if (atkDir[move.From()] &&
-          (atkDir[move.From()] != abs(_dir[move.From()][move.To()])))
-      {
+      if (pinDir[from] && (pinDir[from] != abs(Direction(from, to)))) {
         return;
       }
     }
-    if (cap && !IS_CAP(cap)) {
-      Print();
-      std::cout << move.ToString() << std::endl;
-    }
-    (moves[moveCount++] = move).SetCapPromo(cap, promo);
+    moves[moveCount++].Set(type, from, to, cap, promo);
+  }
+  void AddMove(const Color color, const Move& move,
+               const int cap, const int promo)
+  {
+    AddMove(color, move.Type(), move.From(), move.To(), cap, promo);
   }
   template<Color color>
   void GetPawnMoves(const Move* mv) {
@@ -1020,8 +1028,7 @@ public:
   }
   void GetSliderMoves(const Color color, Move** mvs, const int count) {
     assert(mvs);
-    int cap;
-    for (int i = 0; (i < count) && mvs[i]; ++i) {
+    for (int cap, i = 0; (i < count) && mvs[i]; ++i) {
       for (const Move* mv = mvs[i]; *mv; ++mv) {
         assert(mv->Valid());
         assert(_board[mv->From()] == (color|mv->Type()));
@@ -1098,7 +1105,7 @@ public:
     const int y = YC(from);
     assert(y == YC(cap));
     assert(y == (color ? 3 : 4));
-    assert(_dist[from][cap] == 1);
+    assert(Distance(from, cap) == 1);
     if (y != YC(_king[color])) {
       return false;
     }
@@ -1137,135 +1144,135 @@ public:
   int GetCheckEvasions() {
     assert(IS_SQUARE(_king[color]));
     assert(_board[_king[color]] == (color|King));
+    int from = _king[color];
     int attackers = 0;
     int squareCount = 0;
     int squares[40];
     int xrayCount = 0;
     int xray[4] = {-1,-1,-1,-1};
+    const Move* mv;
+    Move** mvs;
     if (_diagSliders[!color] + _crossSliders[!color]) {
-      memset(atkDir, 0, sizeof(atkDir));
+      memset(pinDir, 0, sizeof(pinDir));
     }
-    const Move* mv = _knightMoves[_king[color]];
-    for (; *mv; ++mv) {
+    for (mv = _knightMoves[from]; *mv; ++mv) {
       assert(mv->Valid());
       assert(mv->Type() == KnightMove);
-      assert(mv->From() == _king[color]);
+      assert(mv->From() == from);
       if (_board[mv->To()] == ((!color)|Knight)) {
         attackers++;
         assert(squareCount < 40);
         squares[squareCount++] = mv->To();
       }
     }
-    Move** mvs = _queenMoves[_king[color]];
+    mvs = _queenMoves[from];
     for (int i = 0; (i < 8) && mvs[i]; ++i) {
-      int firstPiece = 0;
-      int pinnedSquare = -1;
       int newSquareCount = squareCount;
+      int firstPiece = 0;
       for (mv = mvs[i]; *mv; ++mv) {
         assert(mv->Valid());
         assert(mv->Type() == QueenMove);
-        assert(mv->From() == _king[color]);
-        if (firstPiece) {
-          assert(COLOR(firstPiece) == color);
-          assert(IS_SQUARE(pinnedSquare));
-          assert(_board[pinnedSquare] == firstPiece);
-          const int pc = _board[mv->To()];
-          if (pc) {
-            if ((COLOR(pc) != color) && (pc >= Bishop) && (pc < King)) {
-              const int dir = _dir[mv->From()][mv->To()];
-              switch (dir) {
-              case SouthWest: case SouthEast: case NorthWest: case NorthEast:
-                if ((pc == ((!color)|Bishop)) || (pc == ((!color)|Queen))) {
-                  atkDir[pinnedSquare] = abs(dir);
+        assert(mv->From() == from);
+        assert(newSquareCount < 40);
+        squares[newSquareCount++] = mv->To();
+        if ((firstPiece = _board[mv->To()])) {
+          break;
+        }
+      }
+      assert(newSquareCount >= squareCount);
+      if (!firstPiece) {
+        continue;
+      }
+      assert(mv->Valid());
+      assert(mv->From() == from);
+      assert(firstPiece == _board[mv->To()]);
+      const int dir = Direction(from, mv->To());
+      if (COLOR(firstPiece) == color) {
+        if (_diagSliders[!color] + _crossSliders[!color]) {
+          const int pinnedSquare = mv->To();
+          for (++mv; *mv; ++mv) {
+            assert(mv->Valid());
+            assert(mv->Type() == QueenMove);
+            assert(mv->From() == from);
+            if (_board[mv->To()]) {
+              switch (_board[mv->To()]) {
+              case ((!color)|Bishop):
+                switch (dir) {
+                case SouthWest: case SouthEast: case NorthWest: case NorthEast:
+                  pinDir[pinnedSquare] = abs(dir);
                 }
                 break;
-              case South: case West: case East: case North:
-                if ((pc == ((!color)|Rook)) || (pc == ((!color)|Queen))) {
-                  atkDir[pinnedSquare] = abs(dir);
+              case ((!color)|Rook):
+                switch (dir) {
+                case South: case West: case East: case North:
+                  pinDir[pinnedSquare] = abs(dir);
                 }
                 break;
-              default:
-                assert(false);
+              case ((!color)|Queen):
+                pinDir[pinnedSquare] = abs(dir);
               }
+              break;
             }
-            break;
           }
         }
-        else {
-          assert(squareCount < 40);
-          squares[squareCount++] = mv->To();
-          if ((firstPiece = _board[mv->To()])) {
-            if (COLOR(firstPiece) == color) {
-              if (_diagSliders[!color] + _crossSliders[!color]) {
-                pinnedSquare = mv->To();
-                continue;
-              }
-            }
-            break;
-          }
-        }
+        continue;
       }
       switch (firstPiece) {
       case ((!color)|Pawn):
-        if (_dist[mv->From()][mv->To()] == 1) {
+        if (Distance(from, mv->To()) == 1) {
           if (color) {
-            switch (_dir[mv->From()][mv->To()]) {
+            switch (dir) {
             case SouthWest: case SouthEast:
-              newSquareCount = squareCount;
+              squareCount = newSquareCount;
               attackers++;
-              break;
             }
           }
           else {
-            switch (_dir[mv->From()][mv->To()]) {
+            switch (dir) {
             case NorthWest: case NorthEast:
-              newSquareCount = squareCount;
+              squareCount = newSquareCount;
               attackers++;
-              break;
             }
           }
         }
         break;
       case ((!color)|Bishop):
-        switch (_dir[mv->From()][mv->To()]) {
+        switch (dir) {
         case SouthWest: case SouthEast: case NorthWest: case NorthEast:
-          if (_dist[mv->From()][mv->To()] > 1) {
+          if (Distance(from, mv->To()) > 1) {
             assert(xrayCount < 4);
-            xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+            xray[xrayCount++] = (from + dir);
           }
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-          newSquareCount = squareCount;
+          xray[xrayCount++] = (from - dir);
+          squareCount = newSquareCount;
           attackers++;
-          break;
         }
         break;
       case ((!color)|Rook):
-        switch (_dir[mv->From()][mv->To()]) {
+        switch (dir) {
         case South: case West: case East: case North:
-          if (_dist[mv->From()][mv->To()] > 1) {
+          if (Distance(from, mv->To()) > 1) {
             assert(xrayCount < 4);
-            xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+            xray[xrayCount++] = (from + dir);
           }
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-          newSquareCount = squareCount;
+          xray[xrayCount++] = (from - dir);
+          squareCount = newSquareCount;
           attackers++;
-          break;
         }
         break;
       case ((!color)|Queen):
-        if (_dist[mv->From()][mv->To()] > 1) {
+        if (Distance(from, mv->To()) > 1) {
           assert(xrayCount < 4);
-          xray[xrayCount++] = (mv->From() + _dir[mv->From()][mv->To()]);
+          xray[xrayCount++] = (from + dir);
         }
         assert(xrayCount < 4);
-        xray[xrayCount++] = (mv->From() + _dir[mv->To()][mv->From()]);
-        newSquareCount = squareCount;
+        xray[xrayCount++] = (from - dir);
+        squareCount = newSquareCount;
         attackers++;
         break;
       }
-      squareCount = newSquareCount;
     }
     assert(attackers < 3);
     if (!attackers) {
@@ -1281,15 +1288,15 @@ public:
             (ep == (to + (color ? South : North))))
         {
           if (XC(ep) > 0) {
-            const int from = (ep + (color ? NorthWest : SouthWest));
+            from = (ep + (color ? NorthWest : SouthWest));
             if ((_board[from] == (color|Pawn)) && !EpPinned<color>(from, to)) {
-              AddMove(color, Move().Set(PawnCap, from, ep));
+              AddMove(color, PawnCap, from, ep);
             }
           }
           if (XC(ep) < 7) {
-            const int from = (ep + (color ? NorthEast : SouthEast));
+            from = (ep + (color ? NorthEast : SouthEast));
             if ((_board[from] == (color|Pawn)) && !EpPinned<color>(from, to)) {
-              AddMove(color, Move().Set(PawnCap, from, ep));
+              AddMove(color, PawnCap, from, ep);
             }
           }
         }
@@ -1298,7 +1305,7 @@ public:
           assert(mv->Type() == KnightMove);
           assert(mv->From() == to);
           if (_board[mv->To()] == (color|Knight)) {
-            AddMove(color, Move().Set(KnightMove, mv->To(), to, cap));
+            AddMove(color, KnightMove, mv->To(), to, cap);
           }
         }
         mvs = _bishopMoves[to];
@@ -1307,32 +1314,28 @@ public:
             assert(mv->Valid());
             assert(mv->Type() == BishopMove);
             assert(mv->From() == to);
-            const int from = mv->To();
+            from = mv->To();
             switch (_board[from]) {
             case (color|Pawn):
               if (cap && (color ? (from > to) : (from < to)) &&
-                  (_dist[from][to] == 1))
+                  (Distance(from, to) == 1))
               {
                 if (YC(to) == (color ? 0 : 7)) {
-                  AddMove(color, Move().Set(PawnCap, from, to, cap,
-                                            (color|Queen)));
-                  AddMove(color, Move().Set(PawnCap, from, to, cap,
-                                            (color|Rook)));
-                  AddMove(color, Move().Set(PawnCap, from, to, cap,
-                                            (color|Bishop)));
-                  AddMove(color, Move().Set(PawnCap, from, to, cap,
-                                            (color|Knight)));
+                  AddMove(color, PawnCap, from, to, cap, (color|Queen));
+                  AddMove(color, PawnCap, from, to, cap, (color|Rook));
+                  AddMove(color, PawnCap, from, to, cap, (color|Bishop));
+                  AddMove(color, PawnCap, from, to, cap, (color|Knight));
                 }
                 else {
-                  AddMove(color, Move().Set(PawnCap, from, to, cap));
+                  AddMove(color, PawnCap, from, to, cap);
                 }
               }
               break;
             case (color|Bishop):
-              AddMove(color, Move().Set(BishopMove, from, to, cap));
+              AddMove(color, BishopMove, from, to, cap);
               break;
             case (color|Queen):
-              AddMove(color, Move().Set(QueenMove, from, to, cap));
+              AddMove(color, QueenMove, from, to, cap);
               break;
             }
             if (_board[from]) {
@@ -1346,37 +1349,33 @@ public:
             assert(mv->Valid());
             assert(mv->Type() == RookMove);
             assert(mv->From() == to);
-            const int from = mv->To();
+            from = mv->To();
             switch (_board[from]) {
             case (color|Pawn):
-              if (!cap && (_dir[from][to] == (color ? South : North))) {
-                if (_dist[from][to] == 1) {
+              if (!cap && (Direction(from, to) == (color ? South : North))) {
+                if (Distance(from, to) == 1) {
                   if (YC(to) == (color ? 0 : 7)) {
-                    AddMove(color, Move().Set(PawnMove, from, to, 0,
-                                              (color|Queen)));
-                    AddMove(color, Move().Set(PawnMove, from, to, 0,
-                                              (color|Rook)));
-                    AddMove(color, Move().Set(PawnMove, from, to, 0,
-                                              (color|Bishop)));
-                    AddMove(color, Move().Set(PawnMove, from, to, 0,
-                                              (color|Knight)));
+                    AddMove(color, PawnMove, from, to, 0, (color|Queen));
+                    AddMove(color, PawnMove, from, to, 0, (color|Rook));
+                    AddMove(color, PawnMove, from, to, 0, (color|Bishop));
+                    AddMove(color, PawnMove, from, to, 0, (color|Knight));
                   }
                   else {
-                    AddMove(color, Move().Set(PawnMove, from, to));
+                    AddMove(color, PawnMove, from, to);
                   }
                 }
-                else if ((_dist[from][to] == 2) &&
+                else if ((Distance(from, to) == 2) &&
                          (YC(to) == (color ? 4 : 3)))
                 {
-                  AddMove(color, Move().Set(PawnLung, from, to));
+                  AddMove(color, PawnLung, from, to);
                 }
               }
               break;
             case (color|Rook):
-              AddMove(color, Move().Set(RookMove, from, to, cap));
+              AddMove(color, RookMove, from, to, cap);
               break;
             case (color|Queen):
-              AddMove(color, Move().Set(QueenMove, from, to, cap));
+              AddMove(color, QueenMove, from, to, cap);
               break;
             }
             if (_board[from]) {
@@ -1392,7 +1391,7 @@ public:
       assert(mv->From() == _king[color]);
       assert(_board[mv->From()] == (color|King));
       if (mv->Type() != KingMove) {
-        continue;
+        break;
       }
       const int to = mv->To();
       if ((to == xray[0]) || (to == xray[1]) ||
@@ -1518,7 +1517,7 @@ private:
   int ply;
   int state;
   int ep;
-  int atkDir[64];
+  int pinDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];
@@ -1720,16 +1719,16 @@ void StackKingMoves(const int from, int& stackPos) {
   Move* first = NULL;
   Move* mv = NULL;
   int to = 0;
-  if (from == (color ? E8 : E1)) {
-    (mv = StackMove(stackPos))->Set(CastleShort, from, (color ? G8 : G1));
-    if (!first) first = mv;
-    (mv = StackMove(stackPos))->Set(CastleLong, from, (color ? C8 : C1));
-  }
   for (int i = 0; i < 8; ++i) {
     if (GetToSquare(from, dir[i], to)) {
       (mv = StackMove(stackPos))->Set(KingMove, from, to);
       if (!first) first = mv;
     }
+  }
+  if (from == (color ? E8 : E1)) {
+    (mv = StackMove(stackPos))->Set(CastleShort, from, (color ? G8 : G1));
+    if (!first) first = mv;
+    (mv = StackMove(stackPos))->Set(CastleLong, from, (color ? C8 : C1));
   }
   (mv = StackMove(stackPos))->Clear();
   if (!first) first = mv;
