@@ -9,29 +9,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh aperft
 
-    80464 aperft.O1
-     min KLeafs/sec = 18465.9
-     max KLeafs/sec = 55578.4
+    88096	aperft.O1
+     min KLeafs/sec = 23293.3
+     max KLeafs/sec = 60680
 
-    real  6m7.375s
-    user  6m7.076s
-    sys 0m0.060s
+    real	4m57.278s
+    user	4m57.568s
+    sys	0m0.048s
 
-    83896 aperft.O2
-     min KLeafs/sec = 20997.1
-     max KLeafs/sec = 61469.6
+    87776	aperft.O2
+     min KLeafs/sec = 25449.5
+     max KLeafs/sec = 67771.4
 
-    real  5m30.147s
-    user  5m29.776s
-    sys 0m0.096s
+    real	4m41.584s
+    user	4m41.896s
+    sys	0m0.064s
 
-    84168 aperft.O3
-     min KLeafs/sec = 19457.7
-     max KLeafs/sec = 63422
+    92352	aperft.O3
+     min KLeafs/sec = 25026.8
+     max KLeafs/sec = 66905.2
 
-    real  5m41.394s
-    user  5m40.996s
-    sys 0m0.100s
+    real	4m41.127s
+    user	4m41.380s
+    sys	0m0.060s
 
 # bperft
 This is `aperft` with directional slider attack tables.
@@ -44,29 +44,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh bperft
 
-    84936 bperft.O1
-     min KLeafs/sec = 18956.7
-     max KLeafs/sec = 50519.2
+    85024	bperft.O1
+     min KLeafs/sec = 19591.3
+     max KLeafs/sec = 52363
 
-    real  6m48.395s
-    user  6m47.928s
-    sys 0m0.044s
+    real	6m13.982s
+    user	6m14.324s
+    sys	0m0.088s
 
-    84384 bperft.O2
-     min KLeafs/sec = 27894.6
-     max KLeafs/sec = 59966.2
+    84384	bperft.O2
+     min KLeafs/sec = 26631.9
+     max KLeafs/sec = 62561.6
 
-    real  5m16.572s
-    user  5m16.220s
-    sys 0m0.032s
+    real	5m6.857s
+    user	5m7.184s
+    sys	0m0.068s
 
-    88928 bperft.O3
-     min KLeafs/sec = 26469
-     max KLeafs/sec = 59305.2
+    88928	bperft.O3
+     min KLeafs/sec = 24257.5
+     max KLeafs/sec = 61004.9
 
-    real  5m27.083s
-    user  5m26.724s
-    sys 0m0.084s
+    real	5m47.765s
+    user	5m48.092s
+    sys	0m0.052s
 
 # cperft
 This is `aperft` with pre-calculated move tables replaced with pre-calculated farthest square per direction tables.  Pawn pushes and castling moves are not pre-calculated.
@@ -77,29 +77,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh cperft
 
-    79576 cperft.O1
-     min KLeafs/sec = 24934.3
-     max KLeafs/sec = 70203.2
+    79624	cperft.O1
+     min KLeafs/sec = 21925
+     max KLeafs/sec = 70690
 
-    real  4m55.266s
-    user  4m55.532s
-    sys 0m0.084s
+    real	5m2.889s
+    user	5m3.160s
+    sys	0m0.064s
 
-    87192 cperft.O2
-     min KLeafs/sec = 21511.7
-     max KLeafs/sec = 76376.5
+    83352	cperft.O2
+     min KLeafs/sec = 24553.7
+     max KLeafs/sec = 78322.2
 
-    real  4m45.614s
-    user  4m45.896s
-    sys 0m0.032s
+    real	4m29.429s
+    user	4m29.704s
+    sys	0m0.024s
 
-    92360 cperft.O3
-     min KLeafs/sec = 22073.4
-     max KLeafs/sec = 79577.1
+    96440	cperft.O3
+     min KLeafs/sec = 26675.2
+     max KLeafs/sec = 76466.9
 
-    real  4m42.969s
-    user  4m43.244s
-    sys 0m0.056s
+    real	4m21.413s
+    user	4m21.668s
+    sys	0m0.036s
 
 # dperft
 This is `cperft` with directional slider attack tables.
@@ -112,27 +112,28 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh dperft
 
-    88136 dperft.O1
-     min KLeafs/sec = 24779.1
-     max KLeafs/sec = 62000.9
+    84040	dperft.O1
+     min KLeafs/sec = 26340.5
+     max KLeafs/sec = 64157.2
 
-    real  5m45.568s
-    user  5m45.956s
-    sys 0m0.108s
+    real	5m19.746s
+    user	5m20.040s
+    sys	0m0.056s
 
-    87560 dperft.O2
-     min KLeafs/sec = 22223.8
-     max KLeafs/sec = 66060.9
+    83464	dperft.O2
+     min KLeafs/sec = 24069.8
+     max KLeafs/sec = 66697.9
 
-    real  5m14.949s
-    user  5m15.312s
-    sys 0m0.040s
+    real	5m18.551s
+    user	5m18.848s
+    sys	0m0.052s
 
-    96816 dperft.O3
-     min KLeafs/sec = 29344.5
-     max KLeafs/sec = 68249
+    96872	dperft.O3
+     min KLeafs/sec = 25773.4
+     max KLeafs/sec = 67090.6
 
-    real  4m42.749s
-    user  4m43.044s
-    sys 0m0.068s
+    real	4m43.968s
+    user	4m44.240s
+    sys	0m0.044s
+
 
