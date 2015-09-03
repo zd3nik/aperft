@@ -148,13 +148,13 @@ const int _TOUCH[64] = {
 };
 
 //-----------------------------------------------------------------------------
-int _dist[64][64] = {0};
-int _dir[64][64] = {0};
-int _board[64] = {0};
-int _king[2] = {0};
-int _pieceCount[2] = {0};
-int _diagSliders[2] = {0};
-int _crossSliders[2] = {0};
+char _dist[64][64] = {0};
+char _dir[64][64] = {0};
+char _board[64] = {0};
+char _king[2] = {0};
+char _pieceCount[2] = {0};
+char _diagSliders[2] = {0};
+char _crossSliders[2] = {0};
 
 //--------------------------------------------------------------------------
 void InitDistDir() {
@@ -214,14 +214,14 @@ void InitDistDir() {
 }
 
 //-----------------------------------------------------------------------------
-int Distance(const int from, const int to) {
+inline int Distance(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dist[from][to];
 }
 
 //-----------------------------------------------------------------------------
-int Direction(const int from, const int to) {
+inline int Direction(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dir[from][to];
@@ -631,7 +631,7 @@ public:
     assert(IS_SQUARE(sqr));
     for (uint64_t mvs = _knightMoves[sqr]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      assert(IS_SQUARE(((mvs & 0xFF) - 1)));
+      assert(IS_SQUARE((mvs & 0xFF) - 1));
       assert(int((mvs & 0xFF) - 1) != sqr);
       if (_board[(mvs & 0xFF) - 1] == (color|Knight)) {
         return true;
@@ -1175,8 +1175,7 @@ public:
     int to;
     for (uint64_t mvs = _pawnCaps[from][color]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      const int to = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(to));
+      to = ((mvs & 0xFF) - 1);
       assert(Distance(from, to) == 1);
       if (!(cap = _board[to])) {
         if (ep && (to == ep) &&
@@ -1243,7 +1242,6 @@ public:
     while (mvs) {
       assert(mvs & 0xFF);
       const int end = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(end));
       const int dir = (Direction(from, end));
       assert(IS_DIR(dir));
       for (int to = (from + dir);; to += dir) {
@@ -1275,7 +1273,6 @@ public:
     for (uint64_t mvs = _kingMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
       const int to = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(to));
       assert(Distance(from, to) == 1);
       if (!AttackedBy<!color>(to)) {
         const int cap = _board[to];
@@ -1368,11 +1365,10 @@ public:
     int squares[40];
     int xrayCount = 0;
     int xray[4] = {-1,-1,-1,-1};
-    uint64_t mvs;
     if (_diagSliders[!color] + _crossSliders[!color]) {
       memset(pinDir, 0, sizeof(pinDir));
     }
-    for (mvs = _knightMoves[from]; mvs; mvs >>=8) {
+    for (uint64_t mvs = _knightMoves[from]; mvs; mvs >>=8) {
       assert(mvs & 0xFF);
       const int to = ((mvs & 0xFF) - 1);
       assert(IS_SQUARE(to));
@@ -1383,11 +1379,9 @@ public:
         squares[squareCount++] = to;
       }
     }
-    for (mvs = _queenMoves[from]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _queenMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
       const int end = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(end));
-      assert(end != from);
       const int dir = Direction(from, end);
       assert(IS_DIR(dir));
       int newSquareCount = squareCount;
@@ -1522,7 +1516,7 @@ public:
             }
           }
         }
-        for (mvs = _knightMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _knightMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
           from = ((mvs & 0xFF) - 1);
           assert(IS_SQUARE(from));
@@ -1531,7 +1525,7 @@ public:
             AddMove(color, KnightMove, from, to, cap);
           }
         }
-        for (mvs = _bishopMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _bishopMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
           const int end = ((mvs & 0xFF) - 1);
           const int dir = Direction(to, end);
@@ -1567,7 +1561,7 @@ public:
             }
           }
         }
-        for (mvs = _rookMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _rookMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
           const int end = ((mvs & 0xFF) - 1);
           const int dir = Direction(to, end);
@@ -1612,7 +1606,7 @@ public:
     }
     // get king moves
     from = _king[color];
-    for (mvs = _kingMoves[from]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _kingMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
       const int to = ((mvs & 0xFF) - 1);
       assert(IS_SQUARE(to));
@@ -1739,14 +1733,14 @@ private:
   int ply;
   int state;
   int ep;
-  int pinDir[64];
+  char pinDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];
 };
 
 //-----------------------------------------------------------------------------
-Node  _nodes[MaxPlies];
+Node _nodes[MaxPlies];
 
 //-----------------------------------------------------------------------------
 void InitNodeStack() {

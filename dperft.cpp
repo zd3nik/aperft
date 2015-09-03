@@ -214,14 +214,14 @@ void InitDistDir() {
 }
 
 //-----------------------------------------------------------------------------
-int Distance(const int from, const int to) {
+inline int Distance(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dist[from][to];
 }
 
 //-----------------------------------------------------------------------------
-int Direction(const int from, const int to) {
+inline int Direction(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dir[from][to];
@@ -482,7 +482,7 @@ const char _atkShift[19] = {
 };
 
 //-----------------------------------------------------------------------------
-int AttackShift(const int dir) {
+inline int AttackShift(const int dir) {
   assert(IS_DIR(dir));
   assert(_atkShift[dir + 9] >= 0);
   assert(_atkShift[dir + 9] < 64);
@@ -491,18 +491,19 @@ int AttackShift(const int dir) {
 }
 
 //-----------------------------------------------------------------------------
-void AddAttack(const int from, const int to) {
+inline void AddAttack(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   assert(from != to);
   assert(IS_SLIDER(_board[from]));
   const int shift = AttackShift(Direction(from, to));
-  _atkd[to] = ((_atkd[to] & ~(0xFFULL << shift)) |
-               ((uint64_t(from) + 1) << shift));
+  assert(!(_atkd[to] & (0xFFULL << shift)) ||
+         ((_atkd[to] & (0xFFULL << shift)) == (uint64_t(from + 1) << shift)));
+  _atkd[to] |= (uint64_t(from + 1) << shift);
 }
 
 //-----------------------------------------------------------------------------
-void ClearAttack(const int from, const int to) {
+inline void ClearAttack(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   assert(from != to);
@@ -521,8 +522,6 @@ void AddAttacksFrom(const int pc, const int from) {
   for (; mvs; mvs >>= 8) {
     assert(mvs & 0xFF);
     const int end = ((mvs & 0xFF) - 1);
-    assert(end != from);
-    assert(IS_SQUARE(end));
     const int dir = Direction(from, end);
     assert(IS_DIR(dir));
     for (int to = (from + dir);; to += dir) {
@@ -547,8 +546,6 @@ void ClearAttacksFrom(const int pc, const int from) {
   for (; mvs; mvs >>= 8) {
     assert(mvs & 0xFF);
     const int end = ((mvs & 0xFF) - 1);
-    assert(end != from);
-    assert(IS_SQUARE(end));
     const int dir = Direction(from, end);
     assert(IS_DIR(dir));
     for (int to = (from + dir);; to += dir) {
@@ -639,7 +636,6 @@ public:
     desc = other.desc;
     return *this;
   }
-  Move& Clear() { desc = NoMove; return *this; }
   Move& Set(const int type, const int from, const int to,
             const int cap = 0, const int promo = 0)
   {
@@ -656,17 +652,7 @@ public:
     Validate();
     return *this;
   }
-  Move& SetCapPromo(const int cap, const int promo) {
-    assert(!cap || IS_CAP(cap));
-    assert(!promo || IS_PROMO(promo));
-    desc = ((desc & TwentyBits)   | // type, from, to
-            (cap   <<   CapShift) |
-            (promo << PromoShift));
-    assert(Cap() == cap);
-    assert(Promo() == promo);
-    Validate();
-    return *this;
-  }
+  void Clear() { desc = NoMove; }
   bool operator!() const { return !desc; }
   bool operator==(const Move& other) const { return (desc == other.desc); }
   bool operator!=(const Move& other) const { return (desc != other.desc); }
@@ -791,44 +777,43 @@ public:
   template<Color color>
   bool AttackedBy(const int sqr) const {
     assert(IS_SQUARE(sqr));
-    uint64_t mvs;
-    int from;
-    int dir;
     if (_atkd[sqr]) {
-      for (mvs = _atkd[sqr]; mvs; mvs >>= 8) {
+      for (uint64_t mvs = _atkd[sqr]; mvs; mvs >>= 8) {
         if (mvs & 0xFF) {
-          from = ((mvs & 0xFF) - 1);
-          assert(IS_SQUARE(from));
-          assert(IS_SLIDER(_board[from]));
-          assert(IS_DIR(Direction(from, sqr)));
-          if (COLOR(_board[from]) == color) {
+          assert(IS_SQUARE((mvs & 0xFF) - 1));
+          assert(IS_SLIDER(_board[(mvs & 0xFF) - 1]));
+          assert(IS_DIR(Direction(((mvs & 0xFF) - 1), sqr)));
+          if (COLOR(_board[(mvs & 0xFF) - 1]) == color) {
             return true;
           }
         }
       }
     }
-    for (mvs = _knightMoves[sqr]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _knightMoves[sqr]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      from = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(from));
-      assert(from != sqr);
-      if (_board[from] == (color|Knight)) {
+      assert(IS_SQUARE((mvs & 0xFF) - 1));
+      assert(int((mvs & 0xFF) - 1) != sqr);
+      if (_board[(mvs & 0xFF) - 1] == (color|Knight)) {
         return true;
       }
     }
-    for (mvs = _kingMoves[sqr]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _kingMoves[sqr]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      from = ((mvs & 0xFF) - 1);
-      assert(from != sqr);
-      assert(IS_SQUARE(from));
+      const int from = ((mvs & 0xFF) - 1);
       assert(IS_DIR(Direction(sqr, from)));
       switch (_board[from]) {
       case (color|Pawn):
-        dir = Direction(sqr, from);
-        if ((dir == (color ? NorthWest : SouthWest)) ||
-            (dir == (color ? NorthEast : SouthEast)))
-        {
-          return true;
+        if (color) {
+          switch (Direction(sqr, from)) {
+          case NorthWest: case NorthEast:
+            return true;
+          }
+        }
+        else {
+          switch (Direction(sqr, from)) {
+          case SouthWest: case SouthEast:
+            return true;
+          }
         }
         break;
       case (color|King):
@@ -842,8 +827,6 @@ public:
     for (uint64_t mvs = _queenMoves[to]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
       const int end = ((mvs & 0xFF) - 1);
-      assert(end != to);
-      assert(IS_SQUARE(end));
       const int dir = Direction(end, to);
       assert(IS_DIR(dir));
       for (int from = (to - dir);; from -= dir) {
@@ -855,7 +838,7 @@ public:
               ((IS_DIAG(dir) && ((Black|pc) != (Black|Rook))) ||
                (IS_CROSS(dir) && ((Black|pc) != (Black|Bishop)))))
           {
-            atk |= ((uint64_t(from) + 1) << AttackShift(dir));
+            atk |= (uint64_t(from + 1) << AttackShift(dir));
           }
           break;
         }
@@ -1237,7 +1220,7 @@ public:
 //      std::cout << "EXEC " << move.ToString() << std::endl;
 //      Print();
 //    }
-    assert(VerifyAttacks(true));
+//    assert(VerifyAttacks(true));
   }
   template<Color color>
   void Undo(const Move& move) const {
@@ -1368,7 +1351,6 @@ public:
     }
     else if (_atkd[to]) {
       ExtendAttacks(to);
-
     }
     if (!cap && (move.Type() == PawnCap) &&
         _atkd[ep + (color ? North : South)])
@@ -1398,11 +1380,15 @@ public:
 //      std::cout << "UNDO " << move.ToString() << std::endl;
 //      Print();
 //    }
-    assert(VerifyAttacks(true));
+//    assert(VerifyAttacks(true));
   }
   void AddMove(const Color color, const int type, const int from, const int to,
                const int cap = 0, const int promo = 0)
   {
+    assert(IS_MTYPE(type));
+    assert(IS_SQUARE(from));
+    assert(IS_SQUARE(to));
+    assert(from != to);
     assert(moveCount >= 0);
     assert(moveCount < MoveListSize);
     if (_diagSliders[!color] + _crossSliders[!color]) {
@@ -1416,14 +1402,11 @@ public:
   void GetPawnMoves(const int from) {
     assert(IS_SQUARE(from));
     assert(_board[from] == (color|Pawn));
-    uint64_t mvs;
     int cap;
     int to;
-    for (mvs = _pawnCaps[from][color]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _pawnCaps[from][color]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
       to = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(to));
-      assert(to != from);
       assert(Distance(from, to) == 1);
       if (!(cap = _board[to])) {
         if (ep && (to == ep) &&
@@ -1468,15 +1451,13 @@ public:
   void GetKnightMoves(const Color color, const int from) {
     assert(IS_SQUARE(from));
     assert(_board[from] == (color|Knight));
-    uint64_t mvs;
-    int cap;
-    int to;
-    for (mvs = _knightMoves[from]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _knightMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      to = ((mvs & 0xFF) - 1);
+      const int to = ((mvs & 0xFF) - 1);
       assert(IS_SQUARE(to));
       assert(to != from);
-      if (!(cap = _board[to])) {
+      const int cap = _board[to];
+      if (!cap) {
         AddMove(color, KnightMove, from, to);
       }
       else if (COLOR(cap) != color) {
@@ -1489,21 +1470,16 @@ public:
   {
     assert(IS_SQUARE(from));
     assert(_board[from] == (color|type));
-    int end;
-    int dir;
-    int cap;
-    int to;
     while (mvs) {
       assert(mvs & 0xFF);
-      end = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(end));
-      assert(end != from);
-      dir = (Direction(from, end));
+      const int end = ((mvs & 0xFF) - 1);
+      const int dir = (Direction(from, end));
       assert(IS_DIR(dir));
-      for (to = (from + dir);; to += dir) {
+      for (int to = (from + dir);; to += dir) {
         assert(IS_SQUARE(to));
         assert(Direction(from, to) == dir);
-        if (!(cap = _board[to])) {
+        const int cap = _board[to];
+        if (!cap) {
           AddMove(color, type, from, to);
         }
         else {
@@ -1525,17 +1501,13 @@ public:
     assert(_board[from] == (color|King));
     assert(_king[color] == from);
     assert(!AttackedBy<!color>(from));
-    uint64_t mvs;
-    int cap;
-    int to;
-    for (mvs = _kingMoves[from]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _kingMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      to = ((mvs & 0xFF) - 1);
-      assert(IS_SQUARE(to));
-      assert(to != from);
+      const int to = ((mvs & 0xFF) - 1);
       assert(Distance(from, to) == 1);
       if (!AttackedBy<!color>(to)) {
-        if (!(cap = _board[to])) {
+        const int cap = _board[to];
+        if (!cap) {
           AddMove(color, KingMove, from, to);
           if ((to == (color ? F8 : F1)) &&
               (state & (color ? BlackShort : WhiteShort)) &&
@@ -1579,7 +1551,7 @@ public:
     const int y = YC(from);
     assert(y == YC(cap));
     assert(y == (color ? 3 : 4));
-    assert(_dist[from][cap] == 1);
+    assert(Distance(from, cap) == 1);
     if (y != YC(_king[color])) {
       return false;
     }
@@ -1618,11 +1590,6 @@ public:
   int GetCheckEvasions() {
     assert(IS_SQUARE(_king[color]));
     assert(_board[_king[color]] == (color|King));
-    uint64_t mvs;
-    int to;
-    int end;
-    int dir;
-    int newSquareCount;
     int from = _king[color];
     int attackers = 0;
     int squareCount = 0;
@@ -1632,9 +1599,9 @@ public:
     if (_diagSliders[!color] + _crossSliders[!color]) {
       memset(pinDir, 0, sizeof(pinDir));
     }
-    for (mvs = _knightMoves[from]; mvs; mvs >>=8) {
+    for (uint64_t mvs = _knightMoves[from]; mvs; mvs >>=8) {
       assert(mvs & 0xFF);
-      to = ((mvs & 0xFF) - 1);
+      const int to = ((mvs & 0xFF) - 1);
       assert(IS_SQUARE(to));
       assert(to != from);
       if (_board[to] == ((!color)|Knight)) {
@@ -1643,89 +1610,66 @@ public:
         squares[squareCount++] = to;
       }
     }
-    if (_diagSliders[!color] + _crossSliders[!color]) {
-      for (mvs = _queenMoves[from]; mvs; mvs >>= 8) {
-        assert(mvs & 0xFF);
-        end = ((mvs & 0xFF) - 1);
-        assert(IS_SQUARE(end));
-        assert(end != from);
-        dir = Direction(from, end);
-        assert(IS_DIR(dir));
-        newSquareCount = squareCount;
-        for (to = (from + dir);; to += dir) {
-          assert(IS_SQUARE(to));
-          assert(Direction(from, to) == dir);
-          assert(newSquareCount < 40);
-          squares[newSquareCount++] = to;
-          if ((to == end) || _board[to]) {
-            break;
+    for (uint64_t mvs = _queenMoves[from]; mvs; mvs >>= 8) {
+      assert(mvs & 0xFF);
+      const int end = ((mvs & 0xFF) - 1);
+      const int dir = Direction(from, end);
+      assert(IS_DIR(dir));
+      int newSquareCount = squareCount;
+      int firstPiece = 0;
+      int to = (from + dir);
+      while (true) {
+        assert(IS_SQUARE(to));
+        assert(Direction(from, to) == dir);
+        assert(newSquareCount < 40);
+        squares[newSquareCount++] = to;
+        if ((to == end) || _board[to]) {
+          firstPiece = _board[to];
+          break;
+        }
+        to += dir;
+      }
+      assert(newSquareCount > squareCount);
+      if (!firstPiece) {
+        continue;
+      }
+      assert(IS_SQUARE(to));
+      assert(firstPiece == _board[to]);
+      if (COLOR(firstPiece) == color) {
+        if (_atkd[to]) {
+          const int af = ((_atkd[to] >> AttackShift(-dir)) & 0xFF);
+          if (af) {
+            assert(IS_SQUARE(af - 1));
+            assert(IS_SLIDER(_board[af - 1]));
+            if (COLOR(_board[af - 1]) != color) {
+              pinDir[to] = abs(dir);
+            }
           }
         }
-        assert(newSquareCount > squareCount);
-        if (!_board[to]) {
-          continue;
+        continue;
+      }
+      switch (firstPiece) {
+      case ((!color)|Pawn):
+        if (Distance(from, to) == 1) {
+          if (color) {
+            switch (dir) {
+            case SouthWest: case SouthEast:
+              squareCount = newSquareCount;
+              attackers++;
+            }
+          }
+          else {
+            switch (dir) {
+            case NorthWest: case NorthEast:
+              squareCount = newSquareCount;
+              attackers++;
+            }
+          }
         }
-        if (COLOR(_board[to]) == color) { // is it pinned?
-          if (_atkd[to]) {
-            const int dir = Direction(to, from);
-            const int af = ((_atkd[to] >> AttackShift(dir)) & 0xFF);
-            if (af) {
-              assert(IS_SQUARE(af - 1));
-              assert(IS_SLIDER(_board[af - 1]));
-              if (COLOR(_board[af - 1]) != color) {
-                pinDir[to] = abs(dir);
-              }
-            }
-          }
-          continue;
-        }
-        switch (_board[to]) {
-        case ((!color)|Pawn):
-          if (Distance(from, to) == 1) {
-            if (color) {
-              switch (Direction(from, to)) {
-              case SouthWest: case SouthEast:
-                squareCount = newSquareCount;
-                attackers++;
-              }
-            }
-            else {
-              switch (Direction(from, to)) {
-              case NorthWest: case NorthEast:
-                squareCount = newSquareCount;
-                attackers++;
-              }
-            }
-          }
-          break;
-        case ((!color)|Bishop):
-          switch ((dir = Direction(from, to))) {
-          case SouthWest: case SouthEast: case NorthWest: case NorthEast:
-            if (Distance(from, to) > 1) {
-              assert(xrayCount < 4);
-              xray[xrayCount++] = (from + dir);
-            }
-            assert(xrayCount < 4);
-            xray[xrayCount++] = (from - dir);
-            squareCount = newSquareCount;
-            attackers++;
-          }
-          break;
-        case ((!color)|Rook):
-          switch ((dir = Direction(from, to))) {
-          case South: case West: case East: case North:
-            if (Distance(from, to) > 1) {
-              assert(xrayCount < 4);
-              xray[xrayCount++] = (from + dir);
-            }
-            assert(xrayCount < 4);
-            xray[xrayCount++] = (from - dir);
-            squareCount = newSquareCount;
-            attackers++;
-          }
-          break;
-        case ((!color)|Queen):
-          dir = Direction(from, to);
+        break;
+      case ((!color)|Bishop):
+        switch (dir) {
+        case SouthWest: case SouthEast: case NorthWest: case NorthEast:
           if (Distance(from, to) > 1) {
             assert(xrayCount < 4);
             xray[xrayCount++] = (from + dir);
@@ -1734,22 +1678,31 @@ public:
           xray[xrayCount++] = (from - dir);
           squareCount = newSquareCount;
           attackers++;
-          break;
         }
-      }
-    }
-    else { // no enemy sliders on the board
-      for (mvs = _pawnCaps[from][color]; mvs; mvs >>= 8) {
-        assert(mvs & 0xFF);
-        to = ((mvs & 0xFF) - 1);
-        assert(IS_SQUARE(to));
-        assert(to != from);
-        assert(Distance(from, to) == 1);
-        if (_board[to] == ((!color)|Pawn)) {
+        break;
+      case ((!color)|Rook):
+        switch (dir) {
+        case South: case West: case East: case North:
+          if (Distance(from, to) > 1) {
+            assert(xrayCount < 4);
+            xray[xrayCount++] = (from + dir);
+          }
+          assert(xrayCount < 4);
+          xray[xrayCount++] = (from - dir);
+          squareCount = newSquareCount;
           attackers++;
-          assert(squareCount < 40);
-          squares[squareCount++] = to;
         }
+        break;
+      case ((!color)|Queen):
+        if (Distance(from, to) > 1) {
+          assert(xrayCount < 4);
+          xray[xrayCount++] = (from + dir);
+        }
+        assert(xrayCount < 4);
+        xray[xrayCount++] = (from - dir);
+        squareCount = newSquareCount;
+        attackers++;
+        break;
       }
     }
     assert(attackers < 3);
@@ -1759,7 +1712,7 @@ public:
     if (attackers == 1) {
       // get non-king moves that block or capture the piece giving check
       for (int z = 0; z < squareCount; ++z) {
-        to = squares[z];
+        const int to = squares[z];
         assert(IS_SQUARE(to));
         const int cap = _board[to];
         if ((cap == ((!color)|Pawn)) &&
@@ -1778,7 +1731,7 @@ public:
             }
           }
         }
-        for (mvs = _knightMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _knightMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
           from = ((mvs & 0xFF) - 1);
           assert(IS_SQUARE(from));
@@ -1787,12 +1740,11 @@ public:
             AddMove(color, KnightMove, from, to, cap);
           }
         }
-        for (mvs = _bishopMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _bishopMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
-          end = ((mvs & 0xFF) - 1);
-          assert(IS_SQUARE(end));
-          assert(end != to);
-          dir = Direction(to, end);
+          const int end = ((mvs & 0xFF) - 1);
+          const int dir = Direction(to, end);
+          assert(IS_DIAG(dir));
           for (from = (to + dir);; from += dir) {
             assert(IS_SQUARE(from));
             assert(Direction(to, from) == dir);
@@ -1824,12 +1776,11 @@ public:
             }
           }
         }
-        for (mvs = _rookMoves[to]; mvs; mvs >>= 8) {
+        for (uint64_t mvs = _rookMoves[to]; mvs; mvs >>= 8) {
           assert(mvs & 0xFF);
-          end = ((mvs & 0xFF) - 1);
-          assert(IS_SQUARE(end));
-          assert(end != to);
-          dir = Direction(to, end);
+          const int end = ((mvs & 0xFF) - 1);
+          const int dir = Direction(to, end);
+          assert(IS_CROSS(dir));
           for (from = (to + dir);; from += dir) {
             assert(IS_SQUARE(from));
             assert(Direction(to, from) == dir);
@@ -1870,9 +1821,9 @@ public:
     }
     // get king moves
     from = _king[color];
-    for (mvs = _kingMoves[from]; mvs; mvs >>= 8) {
+    for (uint64_t mvs = _kingMoves[from]; mvs; mvs >>= 8) {
       assert(mvs & 0xFF);
-      to = ((mvs & 0xFF) - 1);
+      const int to = ((mvs & 0xFF) - 1);
       assert(IS_SQUARE(to));
       assert(to != from);
       if ((to == xray[0]) || (to == xray[1]) ||
@@ -2005,7 +1956,7 @@ private:
 };
 
 //-----------------------------------------------------------------------------
-Node  _nodes[MaxPlies];
+Node _nodes[MaxPlies];
 
 //-----------------------------------------------------------------------------
 void InitNodeStack() {

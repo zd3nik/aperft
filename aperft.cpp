@@ -149,13 +149,13 @@ const int _TOUCH[64] = {
 };
 
 //-----------------------------------------------------------------------------
-int _dist[64][64] = {0};
-int _dir[64][64] = {0};
-int _board[64] = {0};
-int _king[2] = {0};
-int _pieceCount[2] = {0};
-int _diagSliders[2] = {0};
-int _crossSliders[2] = {0};
+char _dist[64][64] = {0};
+char _dir[64][64] = {0};
+char _board[64] = {0};
+char _king[2] = {0};
+char _pieceCount[2] = {0};
+char _diagSliders[2] = {0};
+char _crossSliders[2] = {0};
 
 //--------------------------------------------------------------------------
 void InitDistDir() {
@@ -215,14 +215,14 @@ void InitDistDir() {
 }
 
 //-----------------------------------------------------------------------------
-int Distance(const int from, const int to) {
+inline int Distance(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dist[from][to];
 }
 
 //-----------------------------------------------------------------------------
-int Direction(const int from, const int to) {
+inline int Direction(const int from, const int to) {
   assert(IS_SQUARE(from));
   assert(IS_SQUARE(to));
   return _dir[from][to];
@@ -940,8 +940,7 @@ public:
     }
     moves[moveCount++] = move;
   }
-  void AddMove(const Color color, const int type,
-               const int from, const int to,
+  void AddMove(const Color color, const int type, const int from, const int to,
                const int cap = 0, const int promo = 0)
   {
     assert(IS_MTYPE(type));
@@ -1524,7 +1523,7 @@ private:
 };
 
 //-----------------------------------------------------------------------------
-Node  _nodes[MaxPlies];
+Node _nodes[MaxPlies];
 
 //-----------------------------------------------------------------------------
 void InitNodeStack() {
