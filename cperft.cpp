@@ -228,6 +228,101 @@ inline int Direction(const int from, const int to) {
 }
 
 //-----------------------------------------------------------------------------
+uint64_t Now() {
+#ifdef WIN32
+  return static_cast<uint64_t>(GetTickCount());
+#else
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return static_cast<uint64_t>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+#endif
+}
+
+//-----------------------------------------------------------------------------
+std::string SquareStr(const int sqr) {
+  assert(IS_SQUARE(sqr));
+  char sbuf[4];
+  sbuf[0] = ('a' + XC(sqr));
+  sbuf[1] = ('1' + YC(sqr));
+  sbuf[2] = 0;
+  return std::string(sbuf);
+}
+
+//-----------------------------------------------------------------------------
+class Move {
+public:
+  Move() : desc(NoMove) { }
+  Move(const Move& other) : desc(other.desc) { Validate(); }
+  Move& operator=(const Move& other) {
+    other.Validate();
+    desc = other.desc;
+    return *this;
+  }
+  Move& Set(const int type, const int from, const int to,
+            const int cap = 0, const int promo = 0)
+  {
+    desc = (type                 |
+           (from  <<  FromShift) |
+           (to    <<    ToShift) |
+           (cap   <<   CapShift) |
+           (promo << PromoShift));
+    assert(Type() == type);
+    assert(From() == from);
+    assert(To() == to);
+    assert(Cap() == cap);
+    assert(Promo() == promo);
+    Validate();
+    return *this;
+  }
+  void Clear() { desc = NoMove; }
+  bool operator!() const { return !desc; }
+  bool operator==(const Move& other) const { return (desc == other.desc); }
+  bool operator!=(const Move& other) const { return (desc != other.desc); }
+  operator bool() const { return desc; }
+  operator int() const { return desc; }
+  bool Valid() const { return (Type() && (From() != To())); }
+  int Type() const { return (desc & FourBits);  }
+  int From() const { return ((desc >> FromShift) & SixBits); }
+  int To() const { return ((desc >> ToShift) & SixBits); }
+  int Cap() const { return ((desc >> CapShift) & FourBits); }
+  int Promo() const { return ((desc >> PromoShift) & FourBits); }
+  std::string ToString() const {
+    char sbuf[6];
+    sbuf[0] = ('a' + XC(From()));
+    sbuf[1] = ('1' + YC(From()));
+    sbuf[2] = ('a' + XC(To()));
+    sbuf[3] = ('1' + YC(To()));
+    switch (Black|Promo()) {
+    case (Black|Knight): sbuf[4] = 'n'; sbuf[5] = 0; break;
+    case (Black|Bishop): sbuf[4] = 'b'; sbuf[5] = 0; break;
+    case (Black|Rook):   sbuf[4] = 'r'; sbuf[5] = 0; break;
+    case (Black|Queen):  sbuf[4] = 'q'; sbuf[5] = 0; break;
+    default:
+      assert(!Promo());
+      sbuf[4] = 0;
+    }
+    return std::string(sbuf);
+  }
+  bool operator<(const Move& other) const {
+    return (strcmp(ToString().c_str(), other.ToString().c_str()) < 0);
+  }
+private:
+  int desc;
+  void Validate() const {
+#ifndef NDEBUG
+    if (desc) {
+      assert(IS_MTYPE(Type()));
+      assert(IS_SQUARE(From()));
+      assert(IS_SQUARE(To()));
+      assert(From() != To());
+      assert(!Cap() || IS_CAP(Cap()));
+      assert(!Promo() || IS_PROMO(Promo()));
+    }
+#endif
+  }
+};
+
+//-----------------------------------------------------------------------------
 uint64_t _pawnCaps[64][2] = {0};
 uint64_t _knightMoves[64] = {0};
 uint64_t _bishopMoves[64] = {0};
@@ -456,101 +551,6 @@ void InitMoveMaps() {
     InitKingMoves(sqr);
   }
 }
-
-//-----------------------------------------------------------------------------
-uint64_t Now() {
-#ifdef WIN32
-  return static_cast<uint64_t>(GetTickCount());
-#else
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return static_cast<uint64_t>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
-#endif
-}
-
-//-----------------------------------------------------------------------------
-std::string SquareStr(const int sqr) {
-  assert(IS_SQUARE(sqr));
-  char sbuf[4];
-  sbuf[0] = ('a' + XC(sqr));
-  sbuf[1] = ('1' + YC(sqr));
-  sbuf[2] = 0;
-  return std::string(sbuf);
-}
-
-//-----------------------------------------------------------------------------
-class Move {
-public:
-  Move() : desc(NoMove) { }
-  Move(const Move& other) : desc(other.desc) { Validate(); }
-  Move& operator=(const Move& other) {
-    other.Validate();
-    desc = other.desc;
-    return *this;
-  }
-  Move& Set(const int type, const int from, const int to,
-            const int cap = 0, const int promo = 0)
-  {
-    desc = (type                 |
-           (from  <<  FromShift) |
-           (to    <<    ToShift) |
-           (cap   <<   CapShift) |
-           (promo << PromoShift));
-    assert(Type() == type);
-    assert(From() == from);
-    assert(To() == to);
-    assert(Cap() == cap);
-    assert(Promo() == promo);
-    Validate();
-    return *this;
-  }
-  void Clear() { desc = NoMove; }
-  bool operator!() const { return !desc; }
-  bool operator==(const Move& other) const { return (desc == other.desc); }
-  bool operator!=(const Move& other) const { return (desc != other.desc); }
-  operator bool() const { return desc; }
-  operator int() const { return desc; }
-  bool Valid() const { return (Type() && (From() != To())); }
-  int Type() const { return (desc & FourBits);  }
-  int From() const { return ((desc >> FromShift) & SixBits); }
-  int To() const { return ((desc >> ToShift) & SixBits); }
-  int Cap() const { return ((desc >> CapShift) & FourBits); }
-  int Promo() const { return ((desc >> PromoShift) & FourBits); }
-  std::string ToString() const {
-    char sbuf[6];
-    sbuf[0] = ('a' + XC(From()));
-    sbuf[1] = ('1' + YC(From()));
-    sbuf[2] = ('a' + XC(To()));
-    sbuf[3] = ('1' + YC(To()));
-    switch (Black|Promo()) {
-    case (Black|Knight): sbuf[4] = 'n'; sbuf[5] = 0; break;
-    case (Black|Bishop): sbuf[4] = 'b'; sbuf[5] = 0; break;
-    case (Black|Rook):   sbuf[4] = 'r'; sbuf[5] = 0; break;
-    case (Black|Queen):  sbuf[4] = 'q'; sbuf[5] = 0; break;
-    default:
-      assert(!Promo());
-      sbuf[4] = 0;
-    }
-    return std::string(sbuf);
-  }
-  bool operator<(const Move& other) const {
-    return (strcmp(ToString().c_str(), other.ToString().c_str()) < 0);
-  }
-private:
-  int desc;
-  void Validate() const {
-#ifndef NDEBUG
-    if (desc) {
-      assert(IS_MTYPE(Type()));
-      assert(IS_SQUARE(From()));
-      assert(IS_SQUARE(To()));
-      assert(From() != To());
-      assert(!Cap() || IS_CAP(Cap()));
-      assert(!Promo() || IS_PROMO(Promo()));
-    }
-#endif
-  }
-};
 
 //-----------------------------------------------------------------------------
 const char* NextWord(const char* p) {
@@ -868,9 +868,10 @@ public:
     const int from = move.From();
     const int to   = move.To();
     const int cap  = move.Cap();
+    const int pc   = _board[from];
     switch (move.Type()) {
     case PawnMove:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       assert(!_board[to]);
       assert(!cap);
       _board[from] = 0;
@@ -888,7 +889,7 @@ public:
       dest.ep = 0;
       break;
     case PawnLung:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       assert(YC(from) == (color ? 6 : 1));
       assert(!_board[to]);
       assert(!_board[to + (color ? North : South)]);
@@ -900,7 +901,7 @@ public:
       dest.ep = (to + (color ? North : South));
       break;
     case PawnCap:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       _board[from] = 0;
       if (move.Promo()) {
         assert(IS_PROMO(move.Promo()));
@@ -927,16 +928,16 @@ public:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[from] == (color|move.Type()));
+      assert(pc == (color|move.Type()));
       assert(_board[to] == cap);
       assert(!move.Promo());
       _board[from] = 0;
-      _board[to] = (color|move.Type());
+      _board[to] = pc;
       dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case KingMove:
-      assert(_board[from] == (color|King));
+      assert(pc == (color|King));
       assert(_king[color] == from);
       assert(!move.Promo());
       _board[from] = 0;
@@ -1040,11 +1041,11 @@ public:
     const int from = move.From();
     const int to   = move.To();
     const int cap  = move.Cap();
+    const int pc   = _board[to];
     switch (move.Type()) {
     case PawnMove:
     case PawnLung:
-      assert(move.Promo() ? (_board[to] == move.Promo())
-                          : (_board[to] == (color|Pawn)));
+      assert(move.Promo() ? (pc == move.Promo()) : (pc == (color|Pawn)));
       assert(!cap);
       _board[from] = (color|Pawn);
       _board[to] = 0;
@@ -1055,6 +1056,7 @@ public:
         _board[to] = cap;
       }
       else {
+        assert(pc == (color|Pawn));
         assert(ep && (to == ep));
         assert(!_board[ep + (color ? North : South)]);
         _board[to] = 0;
@@ -1067,14 +1069,14 @@ public:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[to] == (color|move.Type()));
-      _board[from] = (color|move.Type());
+      assert(pc == (color|move.Type()));
+      _board[from] = pc;
       _board[to] = cap;
       break;
     case KingMove:
-      assert(_board[to] == (color|King));
+      assert(pc == (color|King));
       assert(_king[color] == to);
-      _board[from] = (color|King);
+      _board[from] = pc;
       _board[to] = cap;
       _king[color] = from;
       break;
@@ -1082,6 +1084,7 @@ public:
       assert(from == (color ? E8 : E1));
       assert(to == (color ? G8 : G1));
       assert(_king[color] == to);
+      assert(pc == (color|King));
       assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
@@ -1098,6 +1101,7 @@ public:
       assert(from == (color ? E8 : E1));
       assert(to == (color ? C8 : C1));
       assert(_king[color] == to);
+      assert(pc == (color|King));
       assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);

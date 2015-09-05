@@ -9,29 +9,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh aperft
 
-    88096 aperft.O1
-     min KLeafs/sec = 23293.3
-     max KLeafs/sec = 60680
+    83864 aperft.O1
+     min KLeafs/sec = 23079.2
+     max KLeafs/sec = 60096.4
 
-    real  4m57.278s
-    user  4m57.568s
-    sys   0m0.048s
+    real  5m15.405s
+    user  5m15.748s
+    sys   0m0.016s
 
-    87776 aperft.O2
-     min KLeafs/sec = 25449.5
-     max KLeafs/sec = 67771.4
+    83456 aperft.O2
+     min KLeafs/sec = 25244.9
+     max KLeafs/sec = 67464.5
 
-    real  4m41.584s
-    user  4m41.896s
+    real  4m33.247s
+    user  4m33.520s
     sys   0m0.064s
 
-    92352 aperft.O3
-     min KLeafs/sec = 25026.8
-     max KLeafs/sec = 66905.2
+    88208 aperft.O3
+     min KLeafs/sec = 20711.3
+     max KLeafs/sec = 68929.1
 
-    real  4m41.127s
-    user  4m41.380s
-    sys   0m0.060s
+    real  4m57.895s
+    user  4m58.172s
+    sys   0m0.068s
 
 # bperft
 This is `aperft` with directional slider attack tables.
@@ -44,29 +44,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh bperft
 
-    85024 bperft.O1
-     min KLeafs/sec = 19591.3
-     max KLeafs/sec = 52363
+    88264 bperft.O1
+     min KLeafs/sec = 24393.5
+     max KLeafs/sec = 57594.6
 
-    real  6m13.982s
-    user  6m14.324s
-    sys   0m0.088s
+    real  5m39.340s
+    user  5m39.668s
+    sys   0m0.056s
 
-    84384 bperft.O2
-     min KLeafs/sec = 26631.9
-     max KLeafs/sec = 62561.6
+    83688 bperft.O2
+     min KLeafs/sec = 27553.3
+     max KLeafs/sec = 63153.1
 
-    real  5m6.857s
-    user  5m7.184s
-    sys   0m0.068s
-
-    88928 bperft.O3
-     min KLeafs/sec = 24257.5
-     max KLeafs/sec = 61004.9
-
-    real  5m47.765s
-    user  5m48.092s
+    real  5m3.814s
+    user  5m4.112s
     sys   0m0.052s
+
+    92544 bperft.O3
+     min KLeafs/sec = 26876.7
+     max KLeafs/sec = 62340.1
+
+    real  5m9.172s
+    user  5m9.480s
+    sys   0m0.040s
 
 # cperft
 This is `aperft` with pre-calculated move tables replaced with pre-calculated farthest square per direction tables.  Pawn pushes and castling moves are not pre-calculated.
@@ -77,29 +77,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh cperft
 
-    79624 cperft.O1
-     min KLeafs/sec = 21925
-     max KLeafs/sec = 70690
+    75336 cperft.O1
+     min KLeafs/sec = 24960.5
+     max KLeafs/sec = 74125.8
 
-    real  5m2.889s
-    user  5m3.160s
-    sys   0m0.064s
+    real  4m29.507s
+    user  4m29.788s
+    sys   0m0.032s
 
-    83352 cperft.O2
-     min KLeafs/sec = 24553.7
-     max KLeafs/sec = 78322.2
+    83280 cperft.O2
+     min KLeafs/sec = 22052.1
+     max KLeafs/sec = 77975.3
 
-    real  4m29.429s
-    user  4m29.704s
-    sys   0m0.024s
-
-    96440 cperft.O3
-     min KLeafs/sec = 26675.2
-     max KLeafs/sec = 76466.9
-
-    real  4m21.413s
-    user  4m21.668s
+    real  4m43.685s
+    user  4m43.968s
     sys   0m0.036s
+
+    92272 cperft.O3
+     min KLeafs/sec = 22755.6
+     max KLeafs/sec = 79122
+
+    real  4m31.267s
+    user  4m31.516s
+    sys   0m0.060s
 
 # dperft
 This is `cperft` with directional slider attack tables.
@@ -112,30 +112,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh dperft
 
-    84040 dperft.O1
-     min KLeafs/sec = 26340.5
-     max KLeafs/sec = 64157.2
+    79632 dperft.O1
+     min KLeafs/sec = 24719.7
+     max KLeafs/sec = 70152.4
 
-    real  5m19.746s
-    user  5m20.040s
+    real  4m55.769s
+    user  4m56.060s
     sys   0m0.056s
 
-    83464 dperft.O2
-     min KLeafs/sec = 24069.8
-     max KLeafs/sec = 66697.9
+    83352 dperft.O2
+     min KLeafs/sec = 26921
+     max KLeafs/sec = 71843.7
 
-    real  5m18.551s
-    user  5m18.848s
+    real  5m2.335s
+    user  5m2.628s
     sys   0m0.052s
 
-    96872 dperft.O3
-     min KLeafs/sec = 25773.4
-     max KLeafs/sec = 67090.6
+    92320 dperft.O3
+     min KLeafs/sec = 25909.8
+     max KLeafs/sec = 69522.9
 
-    real  4m43.968s
-    user  4m44.240s
-    sys   0m0.044s
-
+    real  4m55.951s
+    user  4m56.268s
+    sys   0m0.024s
 
 # eperft
 This is `dperft` with additional logic to update slider mobility maps.  This doesn't aid in move generation, it only provides extra information for use in a real chess engine.  And this perft program exists for the sole purpose of determining how much overhead is needed to keep the mobility maps updated.  It turns out that the bulk of the overhead is what was already in place for keeping the attack maps updated.  Adding the mobility maps is practically free.
@@ -144,27 +143,27 @@ It may be possible to use the slider mobility table for move generation.  But gi
 
 Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
-    83760 eperft.O1
-     min KLeafs/sec = 25827.8
-     max KLeafs/sec = 63256.3
+    79664 eperft.O1
+     min KLeafs/sec = 23795
+     max KLeafs/sec = 68831.1
 
-    real  5m5.586s
-    user  5m5.736s
-    sys   0m0.056s
+    real  5m24.630s
+    user  5m24.956s
+    sys   0m0.044s
 
-    83296 eperft.O2
-     min KLeafs/sec = 25947.5
-     max KLeafs/sec = 67866.4
+    83384 eperft.O2
+     min KLeafs/sec = 27456.8
+     max KLeafs/sec = 70279.6
 
-    real  5m4.986s
-    user  5m5.148s
+    real  4m55.777s
+    user  4m56.048s
+    sys   0m0.076s
+
+    92352 eperft.O3
+     min KLeafs/sec = 26744.6
+     max KLeafs/sec = 68904.5
+
+    real  4m55.269s
+    user  4m55.548s
     sys   0m0.052s
-
-    92400 eperft.O3
-     min KLeafs/sec = 26642.7
-     max KLeafs/sec = 66629.1
-
-    real  5m10.241s
-    user  5m10.392s
-    sys   0m0.064s
 

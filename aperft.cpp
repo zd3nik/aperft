@@ -333,6 +333,226 @@ Move* _queenMoves[64][8];
 Move* _kingMoves[64][2];
 
 //-----------------------------------------------------------------------------
+Move* StackMove(int& stackPos) {
+  assert(stackPos < MoveStackSize);
+  return &(_moveStack[stackPos++]);
+}
+
+//-----------------------------------------------------------------------------
+bool GetToSquare(const int from, const int dir[2], int& to) {
+  assert(IS_SQUARE(from));
+  assert(dir[0] || dir[1]);
+  const int x = (XC(from) + dir[0]);
+  const int y = (YC(from) + dir[1]);
+  to = SQR(x, y);
+  return (IS_SQUARE(to) && (to != from) && IS_COORD(x) && IS_COORD(y));
+}
+
+//-----------------------------------------------------------------------------
+template<Color color>
+void StackPawnMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  Move* first = NULL;
+  Move* mv = NULL;
+  int to = 0;
+  if (color ? (YC(from) > 0) : (YC(from) < 7)) {
+    if (XC(from) > 0) {
+      to = (from + (color ? SouthWest : NorthWest));
+      (mv = StackMove(stackPos))->Set(PawnCap, from, to);
+      if (!first) first = mv;
+    }
+    if (XC(from) < 7) {
+      to = (from + (color ? SouthEast : NorthEast));
+      (mv = StackMove(stackPos))->Set(PawnCap, from, to);
+      if (!first) first = mv;
+    }
+    to = (from + (color ? South : North));
+    (mv = StackMove(stackPos))->Set(PawnMove, from, to);
+    if (!first) first = mv;
+    if (YC(from) == (color ? 6 : 1)) {
+      (mv = StackMove(stackPos))->Set(PawnLung, from,
+                                      (to + (color ? South : North)));
+    }
+  }
+  (mv = StackMove(stackPos))->Clear();
+  if (!first) first = mv;
+  _pawnMoves[from][color] = first;
+}
+
+//-----------------------------------------------------------------------------
+void StackKnightMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  const int dir[8][2] = {
+    { -1, -2 },
+    {  1, -2 },
+    { -2, -1 },
+    {  2, -1 },
+    { -2,  1 },
+    {  2,  1 },
+    { -1,  2 },
+    {  1,  2 }
+  };
+  Move* first = NULL;
+  Move* mv = NULL;
+  int to = 0;
+  for (int i = 0; i < 8; ++i) {
+    if (GetToSquare(from, dir[i], to)) {
+      (mv = StackMove(stackPos))->Set(KnightMove, from, to);
+      if (!first) first = mv;
+    }
+  }
+  (mv = StackMove(stackPos))->Clear();
+  if (!first) first = mv;
+  _knightMoves[from] = first;
+}
+
+//-----------------------------------------------------------------------------
+void StackBishopMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  const int dir[4][2] = {
+    { -1, -1 },
+    {  1, -1 },
+    { -1,  1 },
+    {  1,  1 }
+  };
+  Move* mv = NULL;
+  int idx = 0;
+  int to = 0;
+  for (int i = 0; i < 4; ++i) {
+    Move* first = NULL;
+    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
+      (mv = StackMove(stackPos))->Set(BishopMove, from, to);
+      if (!first) first = mv;
+    }
+    if (first) {
+      StackMove(stackPos)->Clear();
+      _bishopMoves[from][idx++] = first;
+    }
+  }
+  if (idx < 4) {
+    _bishopMoves[from][idx] = NULL;
+  }
+}
+
+//-----------------------------------------------------------------------------
+void StackRookMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  const int dir[4][2] = {
+    {  0, -1 },
+    { -1,  0 },
+    {  1,  0 },
+    {  0,  1 }
+  };
+  Move* mv = NULL;
+  int idx = 0;
+  int to = 0;
+  for (int i = 0; i < 4; ++i) {
+    Move* first = NULL;
+    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
+      (mv = StackMove(stackPos))->Set(RookMove, from, to);
+      if (!first) first = mv;
+    }
+    if (first) {
+      StackMove(stackPos)->Clear();
+      _rookMoves[from][idx++] = first;
+    }
+  }
+  if (idx < 4) {
+    _rookMoves[from][idx] = NULL;
+  }
+}
+
+//-----------------------------------------------------------------------------
+void StackQueenMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  const int dir[8][2] = {
+    { -1, -1 },
+    {  0, -1 },
+    {  1, -1 },
+    { -1,  0 },
+    {  1,  0 },
+    { -1,  1 },
+    {  0,  1 },
+    {  1,  1 }
+  };
+  Move* mv = NULL;
+  int idx = 0;
+  int to = 0;
+  for (int i = 0; i < 8; ++i) {
+    Move* first = NULL;
+    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
+      (mv = StackMove(stackPos))->Set(QueenMove, from, to);
+      if (!first) first = mv;
+    }
+    if (first) {
+      StackMove(stackPos)->Clear();
+      _queenMoves[from][idx++] = first;
+    }
+  }
+  if (idx < 8) {
+    _queenMoves[from][idx] = NULL;
+  }
+}
+
+//-----------------------------------------------------------------------------
+template<Color color>
+void StackKingMoves(const int from, int& stackPos) {
+  assert(IS_SQUARE(from));
+  const int dir[8][2] = {
+    { -1, -1 },
+    {  0, -1 },
+    {  1, -1 },
+    { -1,  0 },
+    {  1,  0 },
+    { -1,  1 },
+    {  0,  1 },
+    {  1,  1 }
+  };
+  Move* first = NULL;
+  Move* mv = NULL;
+  int to = 0;
+  for (int i = 0; i < 8; ++i) {
+    if (GetToSquare(from, dir[i], to)) {
+      (mv = StackMove(stackPos))->Set(KingMove, from, to);
+      if (!first) first = mv;
+    }
+  }
+  if (from == (color ? E8 : E1)) {
+    (mv = StackMove(stackPos))->Set(CastleShort, from, (color ? G8 : G1));
+    if (!first) first = mv;
+    (mv = StackMove(stackPos))->Set(CastleLong, from, (color ? C8 : C1));
+  }
+  (mv = StackMove(stackPos))->Clear();
+  if (!first) first = mv;
+  _kingMoves[from][color] = first;
+}
+
+//-----------------------------------------------------------------------------
+void InitMoveStack() {
+  memset(_moveStack,   0, sizeof(_moveStack));
+  memset(_pawnMoves,   0, sizeof(_pawnMoves));
+  memset(_knightMoves, 0, sizeof(_knightMoves));
+  memset(_bishopMoves, 0, sizeof(_bishopMoves));
+  memset(_rookMoves,   0, sizeof(_rookMoves));
+  memset(_queenMoves,  0, sizeof(_queenMoves));
+  memset(_kingMoves,   0, sizeof(_kingMoves));
+  int stackPos = 0;
+  for (int sqr = A1; IS_SQUARE(sqr); ++sqr) {
+    StackPawnMoves<White>(sqr, stackPos);
+    StackPawnMoves<Black>(sqr, stackPos);
+    StackKnightMoves(sqr, stackPos);
+    StackBishopMoves(sqr, stackPos);
+    StackRookMoves(sqr, stackPos);
+    StackQueenMoves(sqr, stackPos);
+    StackKingMoves<White>(sqr, stackPos);
+    StackKingMoves<Black>(sqr, stackPos);
+  }
+#ifndef NDEBUG
+  std::cout << "Move stack count = " << stackPos << std::endl;
+#endif
+}
+
+//-----------------------------------------------------------------------------
 const char* NextWord(const char* p) {
   while (p && *p && isspace(*p)) ++p;
   return p;
@@ -645,9 +865,10 @@ public:
     const int from = move.From();
     const int to   = move.To();
     const int cap  = move.Cap();
+    const int pc   = _board[from];
     switch (move.Type()) {
     case PawnMove:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       assert(!_board[to]);
       assert(!cap);
       _board[from] = 0;
@@ -665,7 +886,7 @@ public:
       dest.ep = 0;
       break;
     case PawnLung:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       assert(YC(from) == (color ? 6 : 1));
       assert(!_board[to]);
       assert(!_board[to + (color ? North : South)]);
@@ -677,7 +898,7 @@ public:
       dest.ep = (to + (color ? North : South));
       break;
     case PawnCap:
-      assert(_board[from] == (color|Pawn));
+      assert(pc == (color|Pawn));
       _board[from] = 0;
       if (move.Promo()) {
         assert(IS_PROMO(move.Promo()));
@@ -704,16 +925,16 @@ public:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[from] == (color|move.Type()));
+      assert(pc == (color|move.Type()));
       assert(_board[to] == cap);
       assert(!move.Promo());
       _board[from] = 0;
-      _board[to] = (color|move.Type());
+      _board[to] = pc;
       dest.state = ((state ^ 1) & _TOUCH[from] & _TOUCH[to]);
       dest.ep = 0;
       break;
     case KingMove:
-      assert(_board[from] == (color|King));
+      assert(pc == (color|King));
       assert(_king[color] == from);
       assert(!move.Promo());
       _board[from] = 0;
@@ -817,11 +1038,11 @@ public:
     const int from = move.From();
     const int to   = move.To();
     const int cap  = move.Cap();
+    const int pc   = _board[to];
     switch (move.Type()) {
     case PawnMove:
     case PawnLung:
-      assert(move.Promo() ? (_board[to] == move.Promo())
-                          : (_board[to] == (color|Pawn)));
+      assert(move.Promo() ? (pc == move.Promo()) : (pc == (color|Pawn)));
       assert(!cap);
       _board[from] = (color|Pawn);
       _board[to] = 0;
@@ -832,6 +1053,7 @@ public:
         _board[to] = cap;
       }
       else {
+        assert(pc == (color|Pawn));
         assert(ep && (to == ep));
         assert(!_board[ep + (color ? North : South)]);
         _board[to] = 0;
@@ -844,14 +1066,14 @@ public:
     case BishopMove:
     case RookMove:
     case QueenMove:
-      assert(_board[to] == (color|move.Type()));
-      _board[from] = (color|move.Type());
+      assert(pc == (color|move.Type()));
+      _board[from] = pc;
       _board[to] = cap;
       break;
     case KingMove:
-      assert(_board[to] == (color|King));
+      assert(pc == (color|King));
       assert(_king[color] == to);
-      _board[from] = (color|King);
+      _board[from] = pc;
       _board[to] = cap;
       _king[color] = from;
       break;
@@ -859,6 +1081,7 @@ public:
       assert(from == (color ? E8 : E1));
       assert(to == (color ? G8 : G1));
       assert(_king[color] == to);
+      assert(pc == (color|King));
       assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
@@ -875,6 +1098,7 @@ public:
       assert(from == (color ? E8 : E1));
       assert(to == (color ? C8 : C1));
       assert(_king[color] == to);
+      assert(pc == (color|King));
       assert(!cap);
       assert(!move.Promo());
       assert(!_board[color ? E8 : E1]);
@@ -1516,7 +1740,7 @@ private:
   int ply;
   int state;
   int ep;
-  int pinDir[64];
+  char pinDir[64];
   int moveIndex;
   int moveCount;
   Move moves[MoveListSize];
@@ -1537,226 +1761,6 @@ void InitNodeStack() {
     }
     _nodes[ply].SetPly(ply);
   }
-}
-
-//-----------------------------------------------------------------------------
-Move* StackMove(int& stackPos) {
-  assert(stackPos < MoveStackSize);
-  return &(_moveStack[stackPos++]);
-}
-
-//-----------------------------------------------------------------------------
-bool GetToSquare(const int from, const int dir[2], int& to) {
-  assert(IS_SQUARE(from));
-  assert(dir[0] || dir[1]);
-  const int x = (XC(from) + dir[0]);
-  const int y = (YC(from) + dir[1]);
-  to = SQR(x, y);
-  return (IS_SQUARE(to) && (to != from) && IS_COORD(x) && IS_COORD(y));
-}
-
-//-----------------------------------------------------------------------------
-template<Color color>
-void StackPawnMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  Move* first = NULL;
-  Move* mv = NULL;
-  int to = 0;
-  if (color ? (YC(from) > 0) : (YC(from) < 7)) {
-    if (XC(from) > 0) {
-      to = (from + (color ? SouthWest : NorthWest));
-      (mv = StackMove(stackPos))->Set(PawnCap, from, to);
-      if (!first) first = mv;
-    }
-    if (XC(from) < 7) {
-      to = (from + (color ? SouthEast : NorthEast));
-      (mv = StackMove(stackPos))->Set(PawnCap, from, to);
-      if (!first) first = mv;
-    }
-    to = (from + (color ? South : North));
-    (mv = StackMove(stackPos))->Set(PawnMove, from, to);
-    if (!first) first = mv;
-    if (YC(from) == (color ? 6 : 1)) {
-      (mv = StackMove(stackPos))->Set(PawnLung, from,
-                                      (to + (color ? South : North)));
-    }
-  }
-  (mv = StackMove(stackPos))->Clear();
-  if (!first) first = mv;
-  _pawnMoves[from][color] = first;
-}
-
-//-----------------------------------------------------------------------------
-void StackKnightMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  const int dir[8][2] = {
-    { -1, -2 },
-    {  1, -2 },
-    { -2, -1 },
-    {  2, -1 },
-    { -2,  1 },
-    {  2,  1 },
-    { -1,  2 },
-    {  1,  2 }
-  };
-  Move* first = NULL;
-  Move* mv = NULL;
-  int to = 0;
-  for (int i = 0; i < 8; ++i) {
-    if (GetToSquare(from, dir[i], to)) {
-      (mv = StackMove(stackPos))->Set(KnightMove, from, to);
-      if (!first) first = mv;
-    }
-  }
-  (mv = StackMove(stackPos))->Clear();
-  if (!first) first = mv;
-  _knightMoves[from] = first;
-}
-
-//-----------------------------------------------------------------------------
-void StackBishopMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  const int dir[4][2] = {
-    { -1, -1 },
-    {  1, -1 },
-    { -1,  1 },
-    {  1,  1 }
-  };
-  Move* mv = NULL;
-  int idx = 0;
-  int to = 0;
-  for (int i = 0; i < 4; ++i) {
-    Move* first = NULL;
-    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
-      (mv = StackMove(stackPos))->Set(BishopMove, from, to);
-      if (!first) first = mv;
-    }
-    if (first) {
-      StackMove(stackPos)->Clear();
-      _bishopMoves[from][idx++] = first;
-    }
-  }
-  if (idx < 4) {
-    _bishopMoves[from][idx] = NULL;
-  }
-}
-
-//-----------------------------------------------------------------------------
-void StackRookMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  const int dir[4][2] = {
-    {  0, -1 },
-    { -1,  0 },
-    {  1,  0 },
-    {  0,  1 }
-  };
-  Move* mv = NULL;
-  int idx = 0;
-  int to = 0;
-  for (int i = 0; i < 4; ++i) {
-    Move* first = NULL;
-    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
-      (mv = StackMove(stackPos))->Set(RookMove, from, to);
-      if (!first) first = mv;
-    }
-    if (first) {
-      StackMove(stackPos)->Clear();
-      _rookMoves[from][idx++] = first;
-    }
-  }
-  if (idx < 4) {
-    _rookMoves[from][idx] = NULL;
-  }
-}
-
-//-----------------------------------------------------------------------------
-void StackQueenMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  const int dir[8][2] = {
-    { -1, -1 },
-    {  0, -1 },
-    {  1, -1 },
-    { -1,  0 },
-    {  1,  0 },
-    { -1,  1 },
-    {  0,  1 },
-    {  1,  1 }
-  };
-  Move* mv = NULL;
-  int idx = 0;
-  int to = 0;
-  for (int i = 0; i < 8; ++i) {
-    Move* first = NULL;
-    for (int frm = from; GetToSquare(frm, dir[i], to); frm = to) {
-      (mv = StackMove(stackPos))->Set(QueenMove, from, to);
-      if (!first) first = mv;
-    }
-    if (first) {
-      StackMove(stackPos)->Clear();
-      _queenMoves[from][idx++] = first;
-    }
-  }
-  if (idx < 8) {
-    _queenMoves[from][idx] = NULL;
-  }
-}
-
-//-----------------------------------------------------------------------------
-template<Color color>
-void StackKingMoves(const int from, int& stackPos) {
-  assert(IS_SQUARE(from));
-  const int dir[8][2] = {
-    { -1, -1 },
-    {  0, -1 },
-    {  1, -1 },
-    { -1,  0 },
-    {  1,  0 },
-    { -1,  1 },
-    {  0,  1 },
-    {  1,  1 }
-  };
-  Move* first = NULL;
-  Move* mv = NULL;
-  int to = 0;
-  for (int i = 0; i < 8; ++i) {
-    if (GetToSquare(from, dir[i], to)) {
-      (mv = StackMove(stackPos))->Set(KingMove, from, to);
-      if (!first) first = mv;
-    }
-  }
-  if (from == (color ? E8 : E1)) {
-    (mv = StackMove(stackPos))->Set(CastleShort, from, (color ? G8 : G1));
-    if (!first) first = mv;
-    (mv = StackMove(stackPos))->Set(CastleLong, from, (color ? C8 : C1));
-  }
-  (mv = StackMove(stackPos))->Clear();
-  if (!first) first = mv;
-  _kingMoves[from][color] = first;
-}
-
-//-----------------------------------------------------------------------------
-void InitMoveStack() {
-  memset(_moveStack,   0, sizeof(_moveStack));
-  memset(_pawnMoves,   0, sizeof(_pawnMoves));
-  memset(_knightMoves, 0, sizeof(_knightMoves));
-  memset(_bishopMoves, 0, sizeof(_bishopMoves));
-  memset(_rookMoves,   0, sizeof(_rookMoves));
-  memset(_queenMoves,  0, sizeof(_queenMoves));
-  memset(_kingMoves,   0, sizeof(_kingMoves));
-  int stackPos = 0;
-  for (int sqr = A1; IS_SQUARE(sqr); ++sqr) {
-    StackPawnMoves<White>(sqr, stackPos);
-    StackPawnMoves<Black>(sqr, stackPos);
-    StackKnightMoves(sqr, stackPos);
-    StackBishopMoves(sqr, stackPos);
-    StackRookMoves(sqr, stackPos);
-    StackQueenMoves(sqr, stackPos);
-    StackKingMoves<White>(sqr, stackPos);
-    StackKingMoves<Black>(sqr, stackPos);
-  }
-#ifndef NDEBUG
-  std::cout << "Move stack count = " << stackPos << std::endl;
-#endif
 }
 
 //-----------------------------------------------------------------------------

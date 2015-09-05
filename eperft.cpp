@@ -228,6 +228,101 @@ inline int Direction(const int from, const int to) {
 }
 
 //-----------------------------------------------------------------------------
+uint64_t Now() {
+#ifdef WIN32
+  return static_cast<uint64_t>(GetTickCount());
+#else
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return static_cast<uint64_t>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+#endif
+}
+
+//-----------------------------------------------------------------------------
+std::string SquareStr(const int sqr) {
+  assert(IS_SQUARE(sqr));
+  char sbuf[4];
+  sbuf[0] = ('a' + XC(sqr));
+  sbuf[1] = ('1' + YC(sqr));
+  sbuf[2] = 0;
+  return std::string(sbuf);
+}
+
+//-----------------------------------------------------------------------------
+class Move {
+public:
+  Move() : desc(NoMove) { }
+  Move(const Move& other) : desc(other.desc) { Validate(); }
+  Move& operator=(const Move& other) {
+    other.Validate();
+    desc = other.desc;
+    return *this;
+  }
+  Move& Set(const int type, const int from, const int to,
+            const int cap = 0, const int promo = 0)
+  {
+    desc = (type                 |
+           (from  <<  FromShift) |
+           (to    <<    ToShift) |
+           (cap   <<   CapShift) |
+           (promo << PromoShift));
+    assert(Type() == type);
+    assert(From() == from);
+    assert(To() == to);
+    assert(Cap() == cap);
+    assert(Promo() == promo);
+    Validate();
+    return *this;
+  }
+  void Clear() { desc = NoMove; }
+  bool operator!() const { return !desc; }
+  bool operator==(const Move& other) const { return (desc == other.desc); }
+  bool operator!=(const Move& other) const { return (desc != other.desc); }
+  operator bool() const { return desc; }
+  operator int() const { return desc; }
+  bool Valid() const { return (Type() && (From() != To())); }
+  int Type() const { return (desc & FourBits);  }
+  int From() const { return ((desc >> FromShift) & SixBits); }
+  int To() const { return ((desc >> ToShift) & SixBits); }
+  int Cap() const { return ((desc >> CapShift) & FourBits); }
+  int Promo() const { return ((desc >> PromoShift) & FourBits); }
+  std::string ToString() const {
+    char sbuf[6];
+    sbuf[0] = ('a' + XC(From()));
+    sbuf[1] = ('1' + YC(From()));
+    sbuf[2] = ('a' + XC(To()));
+    sbuf[3] = ('1' + YC(To()));
+    switch (Black|Promo()) {
+    case (Black|Knight): sbuf[4] = 'n'; sbuf[5] = 0; break;
+    case (Black|Bishop): sbuf[4] = 'b'; sbuf[5] = 0; break;
+    case (Black|Rook):   sbuf[4] = 'r'; sbuf[5] = 0; break;
+    case (Black|Queen):  sbuf[4] = 'q'; sbuf[5] = 0; break;
+    default:
+      assert(!Promo());
+      sbuf[4] = 0;
+    }
+    return std::string(sbuf);
+  }
+  bool operator<(const Move& other) const {
+    return (strcmp(ToString().c_str(), other.ToString().c_str()) < 0);
+  }
+private:
+  int desc;
+  void Validate() const {
+#ifndef NDEBUG
+    if (desc) {
+      assert(IS_MTYPE(Type()));
+      assert(IS_SQUARE(From()));
+      assert(IS_SQUARE(To()));
+      assert(From() != To());
+      assert(!Cap() || IS_CAP(Cap()));
+      assert(!Promo() || IS_PROMO(Promo()));
+    }
+#endif
+  }
+};
+
+//-----------------------------------------------------------------------------
 uint64_t _pawnCaps[64][2] = {0};
 uint64_t _knightMoves[64] = {0};
 uint64_t _bishopMoves[64] = {0};
@@ -642,101 +737,6 @@ void ExtendAttacks(const int to) {
     }
   }
 }
-
-//-----------------------------------------------------------------------------
-uint64_t Now() {
-#ifdef WIN32
-  return static_cast<uint64_t>(GetTickCount());
-#else
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return static_cast<uint64_t>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
-#endif
-}
-
-//-----------------------------------------------------------------------------
-std::string SquareStr(const int sqr) {
-  assert(IS_SQUARE(sqr));
-  char sbuf[4];
-  sbuf[0] = ('a' + XC(sqr));
-  sbuf[1] = ('1' + YC(sqr));
-  sbuf[2] = 0;
-  return std::string(sbuf);
-}
-
-//-----------------------------------------------------------------------------
-class Move {
-public:
-  Move() : desc(NoMove) { }
-  Move(const Move& other) : desc(other.desc) { Validate(); }
-  Move& operator=(const Move& other) {
-    other.Validate();
-    desc = other.desc;
-    return *this;
-  }
-  Move& Set(const int type, const int from, const int to,
-            const int cap = 0, const int promo = 0)
-  {
-    desc = (type                 |
-           (from  <<  FromShift) |
-           (to    <<    ToShift) |
-           (cap   <<   CapShift) |
-           (promo << PromoShift));
-    assert(Type() == type);
-    assert(From() == from);
-    assert(To() == to);
-    assert(Cap() == cap);
-    assert(Promo() == promo);
-    Validate();
-    return *this;
-  }
-  void Clear() { desc = NoMove; }
-  bool operator!() const { return !desc; }
-  bool operator==(const Move& other) const { return (desc == other.desc); }
-  bool operator!=(const Move& other) const { return (desc != other.desc); }
-  operator bool() const { return desc; }
-  operator int() const { return desc; }
-  bool Valid() const { return (Type() && (From() != To())); }
-  int Type() const { return (desc & FourBits);  }
-  int From() const { return ((desc >> FromShift) & SixBits); }
-  int To() const { return ((desc >> ToShift) & SixBits); }
-  int Cap() const { return ((desc >> CapShift) & FourBits); }
-  int Promo() const { return ((desc >> PromoShift) & FourBits); }
-  std::string ToString() const {
-    char sbuf[6];
-    sbuf[0] = ('a' + XC(From()));
-    sbuf[1] = ('1' + YC(From()));
-    sbuf[2] = ('a' + XC(To()));
-    sbuf[3] = ('1' + YC(To()));
-    switch (Black|Promo()) {
-    case (Black|Knight): sbuf[4] = 'n'; sbuf[5] = 0; break;
-    case (Black|Bishop): sbuf[4] = 'b'; sbuf[5] = 0; break;
-    case (Black|Rook):   sbuf[4] = 'r'; sbuf[5] = 0; break;
-    case (Black|Queen):  sbuf[4] = 'q'; sbuf[5] = 0; break;
-    default:
-      assert(!Promo());
-      sbuf[4] = 0;
-    }
-    return std::string(sbuf);
-  }
-  bool operator<(const Move& other) const {
-    return (strcmp(ToString().c_str(), other.ToString().c_str()) < 0);
-  }
-private:
-  int desc;
-  void Validate() const {
-#ifndef NDEBUG
-    if (desc) {
-      assert(IS_MTYPE(Type()));
-      assert(IS_SQUARE(From()));
-      assert(IS_SQUARE(To()));
-      assert(From() != To());
-      assert(!Cap() || IS_CAP(Cap()));
-      assert(!Promo() || IS_PROMO(Promo()));
-    }
-#endif
-  }
-};
 
 //-----------------------------------------------------------------------------
 const char* NextWord(const char* p) {
@@ -1622,46 +1622,50 @@ public:
     assert(IS_SQUARE(cap));
     assert(from != cap);
     assert(from != _king[color]);
+    assert(YC(from) == YC(cap));
+    assert(YC(from) == (color ? 3 : 4));
+    assert(Distance(from, cap) == 1);
     assert(_board[from] == (color|Pawn));
     assert(_board[cap] == ((!color)|Pawn));
     assert(_board[_king[color]] == (color|King));
-    if (!_crossSliders[!color]) {
+    if (!_crossSliders[!color] || (YC(from) != YC(_king[color]))) {
       return false;
     }
-    const int y = YC(from);
-    assert(y == YC(cap));
-    assert(y == (color ? 3 : 4));
-    assert(Distance(from, cap) == 1);
-    if (y != YC(_king[color])) {
-      return false;
+    int left = std::min<int>(from, cap);
+    int right = std::max<int>(from, cap);
+    if (_king[color] < left) {
+      right = ((_atkd[right] >> DirShift(West)) & 0xFF);
+      assert(!right || (IS_SQUARE(right - 1) && (YC(right - 1) == YC(from))));
+      if (right-- && (COLOR(_board[right]) != color)) {
+        assert((_board[right] >= Rook) && (_board[right] < King));
+        while (--left > _king[color]) {
+          assert(IS_SQUARE(left));
+          assert(Direction(right, left) == West);
+          if (_board[left]) {
+            assert(_board[left] != (color|King));
+            return false;
+          }
+        }
+        assert(left == _king[color]);
+        return true;
+      }
     }
-    for (int pc, x = (XC(std::min<int>(from, cap)) - 1); x >= 0; --x) {
-      if ((pc = _board[SQR(x, y)]) == (color|King)) {
-        for (x = (XC(std::max<int>(from, cap)) + 1); x < 8; ++x) {
-          if (((pc = _board[SQR(x, y)]) == ((!color)|Rook)) ||
-              (pc == ((!color)|Queen)))
-          {
-            return true;
-          }
-          else if (pc) {
-            break;
-          }
-        }
-        break;
-      }
-      else if ((pc == ((!color)|Rook)) || (pc == ((!color)|Queen))) {
-        for (x = (XC(std::max<int>(from, cap)) + 1); x < 8; ++x) {
-          if ((pc = _board[SQR(x, y)]) == (color|King)) {
-            return true;
-          }
-          else if (pc) {
-            break;
+    else {
+      assert(_king[color] > right);
+      left = ((_atkd[left] >> DirShift(East)) & 0xFF);
+      assert(!left || (IS_SQUARE(left - 1) && (YC(left - 1) == YC(from))));
+      if (left-- && (COLOR(_board[left]) != color)) {
+        assert((_board[left] >= Rook) && (_board[left] < King));
+        while (++right < _king[color]) {
+          assert(IS_SQUARE(right));
+          assert(Direction(left, right) == East);
+          if (_board[right]) {
+            assert(_board[right] != (color|King));
+            return false;
           }
         }
-        break;
-      }
-      else if (pc) {
-        break;
+        assert(right == _king[color]);
+        return true;
       }
     }
     return false;
