@@ -77,7 +77,7 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh cperft
 
-    87768 c88perft.O1
+    87768 cperft.O1
      min KLeafs/sec = 24150
      max KLeafs/sec = 65502.4
 
@@ -85,7 +85,7 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
     user  4m32.157s
     sys   0m0.061s
 
-    87784 c88perft.O2
+    87784 cperft.O2
      min KLeafs/sec = 26158.9
      max KLeafs/sec = 70247.9
 
@@ -93,7 +93,7 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
     user  4m11.733s
     sys   0m0.051s
 
-    75864 c88perft.O3
+    75864 cperft.O3
      min KLeafs/sec = 27452.9
      max KLeafs/sec = 76436.7
 
@@ -112,29 +112,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh dperft
 
-    79632 dperft.O1
-     min KLeafs/sec = 24719.7
-     max KLeafs/sec = 70152.4
+    88016 dperft.O1
+     min KLeafs/sec = 28195.7
+     max KLeafs/sec = 62703.4
 
-    real  4m55.769s
-    user  4m56.060s
-    sys   0m0.056s
+    real  4m41.328s
+    user  4m41.600s
+    sys   0m0.061s
 
-    83352 dperft.O2
-     min KLeafs/sec = 26921
-     max KLeafs/sec = 71843.7
+    87760 dperft.O2
+     min KLeafs/sec = 28911.4
+     max KLeafs/sec = 66859.1
 
-    real  5m2.335s
-    user  5m2.628s
-    sys   0m0.052s
+    real  4m32.320s
+    user  4m32.582s
+    sys   0m0.054s
 
-    92320 dperft.O3
-     min KLeafs/sec = 25909.8
-     max KLeafs/sec = 69522.9
+    80208 dperft.O3
+     min KLeafs/sec = 32332.7
+     max KLeafs/sec = 71763.9
 
-    real  4m55.951s
-    user  4m56.268s
-    sys   0m0.024s
+    real  4m18.079s
+    user  4m18.323s
+    sys   0m0.063s
 
 # eperft
 This is `dperft` with additional logic to update slider mobility maps.  This doesn't aid in move generation, it only provides extra information for use in a real chess engine.  And this perft program exists for the sole purpose of determining how much overhead is needed to keep the mobility maps updated.  It turns out that the bulk of the overhead is what was already in place for keeping the attack maps updated.  Adding the mobility maps is practically free.

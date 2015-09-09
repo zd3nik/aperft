@@ -1295,17 +1295,13 @@ public:
     assert(IS_SQUARE(cap));
     assert(from != cap);
     assert(from != _king[color]);
+    assert(YC(from) == YC(cap));
+    assert(YC(from) == (color ? 3 : 4));
+    assert(Distance(from, cap) == 1);
     assert(_board[from] == (color|Pawn));
     assert(_board[cap] == ((!color)|Pawn));
     assert(_board[_king[color]] == (color|King));
-    if (!_crossSliders[!color]) {
-      return false;
-    }
-    const int y = YC(from);
-    assert(y == YC(cap));
-    assert(y == (color ? 3 : 4));
-    assert(Distance(from, cap) == 1);
-    if (y != YC(_king[color])) {
+    if (!_crossSliders[!color] || (YC(from) != YC(_king[color]))) {
       return false;
     }
     for (int pc, to = (std::min<int>(from, cap) - 1); IS_SQUARE(to); --to) {
