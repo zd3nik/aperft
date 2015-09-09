@@ -77,29 +77,29 @@ Example test run on Intel® Core™ i5-5200U CPU @ 2.20GHz
 
     $ ./test.sh cperft
 
-    75336 cperft.O1
-     min KLeafs/sec = 24960.5
-     max KLeafs/sec = 74125.8
+    87768 c88perft.O1
+     min KLeafs/sec = 24150
+     max KLeafs/sec = 65502.4
 
-    real  4m29.507s
-    user  4m29.788s
-    sys   0m0.032s
+    real  4m31.899s
+    user  4m32.157s
+    sys   0m0.061s
 
-    83280 cperft.O2
-     min KLeafs/sec = 22052.1
-     max KLeafs/sec = 77975.3
+    87784 c88perft.O2
+     min KLeafs/sec = 26158.9
+     max KLeafs/sec = 70247.9
 
-    real  4m43.685s
-    user  4m43.968s
-    sys   0m0.036s
+    real  4m11.490s
+    user  4m11.733s
+    sys   0m0.051s
 
-    92272 cperft.O3
-     min KLeafs/sec = 22755.6
-     max KLeafs/sec = 79122
+    75864 c88perft.O3
+     min KLeafs/sec = 27452.9
+     max KLeafs/sec = 76436.7
 
-    real  4m31.267s
-    user  4m31.516s
-    sys   0m0.060s
+    real  4m1.852s
+    user  4m2.079s
+    sys   0m0.053s
 
 # dperft
 This is `cperft` with directional slider attack tables.
